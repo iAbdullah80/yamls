@@ -1,0 +1,2486 @@
+# Thunes Money Transfer API v2 — client-oriented, non-official OpenAPI transcription.
+# Source: https://docs.thunes.com/money-transfer/v2/
+# Configure API host and HTTP Basic credentials in your generated client.
+openapi: 3.0.3
+info:
+  title: Thunes Money Transfer API v2
+  version: '2.0'
+  description: Client-oriented OpenAPI specification transcribed from the official Thunes Money Transfer v2 reference
+    (https://docs.thunes.com/money-transfer/v2/). This is an independently authored specification, NOT an official
+    Thunes-published OpenAPI file. Configure the generated client base URL to the production or pre-production Thunes
+    host supplied for your account. All system IDs use 64-bit integers; monetary decimal numbers should use java.math.BigDecimal.
+    Respect payer-specific required fields discovered via GET /payers/{id}. Do not assume future response status
+    codes or additional fields are exhaustive.
+servers:
+- url: /
+  description: Relative API root. Set your generated client host/base URL from your Thunes account details; paths
+    include /v2/money-transfer or /v2/simulation.
+security:
+- basicAuth: []
+tags:
+- name: Connectivity
+- name: Discovery
+- name: Account
+- name: Credit Parties
+- name: Quotations
+- name: Transactions
+- name: Simulation
+- name: RFIs
+paths:
+  /ping:
+    get:
+      tags:
+      - Connectivity
+      operationId: ping
+      summary: Check API health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PingResponse'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/services:
+    get:
+      tags:
+      - Discovery
+      operationId: listServices
+      summary: List available services
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PerPage'
+      - $ref: '#/components/parameters/CountryIsoCode'
+      responses:
+        '200':
+          description: List of Service objects
+          headers:
+            X-Total:
+              $ref: '#/components/headers/X-Total'
+            X-Total-Pages:
+              $ref: '#/components/headers/X-Total-Pages'
+            X-Per-Page:
+              $ref: '#/components/headers/X-Per-Page'
+            X-Page:
+              $ref: '#/components/headers/X-Page'
+            X-Next-Page:
+              $ref: '#/components/headers/X-Next-Page'
+            X-Prev-Page:
+              $ref: '#/components/headers/X-Prev-Page'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/payers:
+    get:
+      tags:
+      - Discovery
+      operationId: listPayers
+      summary: List available payers
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PerPage'
+      - $ref: '#/components/parameters/ServiceId'
+      - $ref: '#/components/parameters/CountryIsoCode'
+      - $ref: '#/components/parameters/Currency'
+      responses:
+        '200':
+          description: List of Payer objects
+          headers:
+            X-Total:
+              $ref: '#/components/headers/X-Total'
+            X-Total-Pages:
+              $ref: '#/components/headers/X-Total-Pages'
+            X-Per-Page:
+              $ref: '#/components/headers/X-Per-Page'
+            X-Page:
+              $ref: '#/components/headers/X-Page'
+            X-Next-Page:
+              $ref: '#/components/headers/X-Next-Page'
+            X-Prev-Page:
+              $ref: '#/components/headers/X-Prev-Page'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Payer'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/payers/{id}:
+    get:
+      tags:
+      - Discovery
+      operationId: getPayer
+      summary: Get payer details
+      parameters:
+      - $ref: '#/components/parameters/PayerId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payer'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/payers/{id}/rates:
+    get:
+      tags:
+      - Discovery
+      operationId: getPayerRates
+      summary: Get payer FX rate bands
+      parameters:
+      - $ref: '#/components/parameters/PayerId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayerRates'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/countries:
+    get:
+      tags:
+      - Discovery
+      operationId: listCountries
+      summary: List available countries
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: List of Country objects
+          headers:
+            X-Total:
+              $ref: '#/components/headers/X-Total'
+            X-Total-Pages:
+              $ref: '#/components/headers/X-Total-Pages'
+            X-Per-Page:
+              $ref: '#/components/headers/X-Per-Page'
+            X-Page:
+              $ref: '#/components/headers/X-Page'
+            X-Next-Page:
+              $ref: '#/components/headers/X-Next-Page'
+            X-Prev-Page:
+              $ref: '#/components/headers/X-Prev-Page'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Country'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/lookups/BIC/{swift_bic_code}:
+    get:
+      tags:
+      - Discovery
+      operationId: lookupPayersByBic
+      summary: Look up payer IDs by BIC
+      parameters:
+      - $ref: '#/components/parameters/SwiftBicCode'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: List of PayerIdLookupResult objects
+          headers:
+            X-Total:
+              $ref: '#/components/headers/X-Total'
+            X-Total-Pages:
+              $ref: '#/components/headers/X-Total-Pages'
+            X-Per-Page:
+              $ref: '#/components/headers/X-Per-Page'
+            X-Page:
+              $ref: '#/components/headers/X-Page'
+            X-Next-Page:
+              $ref: '#/components/headers/X-Next-Page'
+            X-Prev-Page:
+              $ref: '#/components/headers/X-Prev-Page'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PayerIdLookupResult'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/balances:
+    get:
+      tags:
+      - Account
+      operationId: listBalances
+      summary: List account balances
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: List of Balance objects
+          headers:
+            X-Total:
+              $ref: '#/components/headers/X-Total'
+            X-Total-Pages:
+              $ref: '#/components/headers/X-Total-Pages'
+            X-Per-Page:
+              $ref: '#/components/headers/X-Per-Page'
+            X-Page:
+              $ref: '#/components/headers/X-Page'
+            X-Next-Page:
+              $ref: '#/components/headers/X-Next-Page'
+            X-Prev-Page:
+              $ref: '#/components/headers/X-Prev-Page'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Balance'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/balances/{balance_id}/movements:
+    get:
+      tags:
+      - Account
+      operationId: listBalanceMovements
+      summary: List balance movements
+      parameters:
+      - $ref: '#/components/parameters/BalanceId'
+      - $ref: '#/components/parameters/MovementFromDate'
+      - $ref: '#/components/parameters/MovementToDate'
+      - $ref: '#/components/parameters/MovementLimit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of BalanceMovement objects
+          headers:
+            X-Next-Cursor:
+              $ref: '#/components/headers/X-Next-Cursor'
+            X-Next-Url:
+              $ref: '#/components/headers/X-Next-Url'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BalanceMovement'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/balances/{balance_id}/topup_instructions:
+    get:
+      tags:
+      - Account
+      operationId: getBalanceTopupInstructions
+      summary: Get balance top-up instructions
+      parameters:
+      - $ref: '#/components/parameters/BalanceId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceTopupInstruction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/reports:
+    get:
+      tags:
+      - Account
+      operationId: listReports
+      summary: List reports
+      parameters:
+      - $ref: '#/components/parameters/ReportFromDate'
+      - $ref: '#/components/parameters/ReportToDate'
+      - $ref: '#/components/parameters/ReportType'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: List of Report objects
+          headers:
+            X-Total:
+              $ref: '#/components/headers/X-Total'
+            X-Total-Pages:
+              $ref: '#/components/headers/X-Total-Pages'
+            X-Per-Page:
+              $ref: '#/components/headers/X-Per-Page'
+            X-Page:
+              $ref: '#/components/headers/X-Page'
+            X-Next-Page:
+              $ref: '#/components/headers/X-Next-Page'
+            X-Prev-Page:
+              $ref: '#/components/headers/X-Prev-Page'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/reports/{id}:
+    get:
+      tags:
+      - Account
+      operationId: getReport
+      summary: Get report details
+      parameters:
+      - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/reports/{id}/files:
+    get:
+      tags:
+      - Account
+      operationId: listReportFiles
+      summary: List files for a report
+      parameters:
+      - $ref: '#/components/parameters/ReportId'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: List of ReportFile objects
+          headers:
+            X-Total:
+              $ref: '#/components/headers/X-Total'
+            X-Total-Pages:
+              $ref: '#/components/headers/X-Total-Pages'
+            X-Per-Page:
+              $ref: '#/components/headers/X-Per-Page'
+            X-Page:
+              $ref: '#/components/headers/X-Page'
+            X-Next-Page:
+              $ref: '#/components/headers/X-Next-Page'
+            X-Prev-Page:
+              $ref: '#/components/headers/X-Prev-Page'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportFile'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/reports/{report_id}/files/{id}:
+    get:
+      tags:
+      - Account
+      operationId: getReportFileDownloadUrl
+      summary: Get signed report-file download URL
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - $ref: '#/components/parameters/FileId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportFileDownload'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/payers/{id}/{transaction_type}/credit-party-information:
+    post:
+      tags:
+      - Credit Parties
+      operationId: getCreditPartyInformation
+      summary: Retrieve beneficiary or receiving-business account information
+      description: Request depends on the payer configuration returned by GET /payers/{id}.
+      parameters:
+      - $ref: '#/components/parameters/PayerId'
+      - $ref: '#/components/parameters/TransactionType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditPartyInformationRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditPartyInformationResponse'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/payers/{id}/{transaction_type}/credit-party-verification:
+    post:
+      tags:
+      - Credit Parties
+      operationId: verifyCreditParty
+      summary: Verify receiving account availability
+      description: Request depends on the payer configuration returned by GET /payers/{id}.
+      parameters:
+      - $ref: '#/components/parameters/PayerId'
+      - $ref: '#/components/parameters/TransactionType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreditPartyVerificationRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditPartyVerificationResponse'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/quotations:
+    post:
+      tags:
+      - Quotations
+      operationId: createQuotation
+      summary: Create FX quotation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuotationRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotation'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/quotations/{id}:
+    get:
+      tags:
+      - Quotations
+      operationId: getQuotation
+      summary: Get quotation by Thunes ID
+      parameters:
+      - $ref: '#/components/parameters/QuotationId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotation'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/quotations/ext-{external_id}:
+    get:
+      tags:
+      - Quotations
+      operationId: getQuotationByExternalId
+      summary: Get quotation by external ID
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quotation'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/quotations/{id}/transactions:
+    post:
+      tags:
+      - Transactions
+      operationId: createTransactionFromQuotationId
+      summary: Create transaction from quotation ID
+      parameters:
+      - $ref: '#/components/parameters/QuotationId'
+      - $ref: '#/components/parameters/SimulatedTransactionHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/quotations/ext-{external_id}/transactions:
+    post:
+      tags:
+      - Transactions
+      operationId: createTransactionFromQuotationExternalId
+      summary: Create transaction from quotation external ID
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      - $ref: '#/components/parameters/SimulatedTransactionHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/{id}:
+    get:
+      tags:
+      - Transactions
+      operationId: getTransactionById
+      summary: Get transaction by Thunes ID
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          headers:
+            x-simulated-transaction:
+              $ref: '#/components/headers/x-simulated-transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/{id}/confirm:
+    post:
+      tags:
+      - Transactions
+      operationId: confirmTransactionById
+      summary: Confirm transaction by Thunes ID
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/{id}/cancel:
+    post:
+      tags:
+      - Transactions
+      operationId: cancelTransactionById
+      summary: Cancel eligible transaction by Thunes ID
+      description: Cancellation is supported only in CREATED or CONFIRMED-WAITING-FOR-PICKUP status. Otherwise Thunes
+        can return error code 1007014.
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/{id}/attachments:
+    post:
+      tags:
+      - Transactions
+      operationId: addTransactionAttachmentById
+      summary: Upload transaction attachment by Thunes ID
+      description: multipart/form-data; at most 3 files per transaction, maximum 8 MB each; generally upload before
+        confirmation.
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 64
+                type:
+                  $ref: '#/components/schemas/AttachmentType'
+                file:
+                  type: string
+                  format: binary
+              required:
+              - name
+              - type
+              - file
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionAttachment'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - Transactions
+      operationId: listTransactionAttachmentsById
+      summary: List transaction attachments by Thunes ID
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: List of TransactionAttachment objects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionAttachment'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/ext-{external_id}:
+    get:
+      tags:
+      - Transactions
+      operationId: getTransactionByExternalId
+      summary: Get transaction by external ID
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+          headers:
+            x-simulated-transaction:
+              $ref: '#/components/headers/x-simulated-transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/ext-{external_id}/confirm:
+    post:
+      tags:
+      - Transactions
+      operationId: confirmTransactionByExternalId
+      summary: Confirm transaction by external ID
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/ext-{external_id}/cancel:
+    post:
+      tags:
+      - Transactions
+      operationId: cancelTransactionByExternalId
+      summary: Cancel eligible transaction by external ID
+      description: Cancellation is supported only in CREATED or CONFIRMED-WAITING-FOR-PICKUP status. Otherwise Thunes
+        can return error code 1007014.
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/transactions/ext-{external_id}/attachments:
+    post:
+      tags:
+      - Transactions
+      operationId: addTransactionAttachmentByExternalId
+      summary: Upload transaction attachment by external ID
+      description: multipart/form-data; at most 3 files per transaction, maximum 8 MB each; generally upload before
+        confirmation.
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 64
+                type:
+                  $ref: '#/components/schemas/AttachmentType'
+                file:
+                  type: string
+                  format: binary
+              required:
+              - name
+              - type
+              - file
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionAttachment'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - Transactions
+      operationId: listTransactionAttachmentsByExternalId
+      summary: List transaction attachments by external ID
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      responses:
+        '200':
+          description: List of TransactionAttachment objects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionAttachment'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/simulation/transactions/{id}/possible-transitions:
+    get:
+      tags:
+      - Simulation
+      operationId: listPossibleSimulationTransitions
+      summary: List allowed simulated status changes
+      description: For pre-production/testing only.
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PossibleTransitions'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/simulation/transactions/{id}/{status_name}:
+    get:
+      tags:
+      - Simulation
+      operationId: simulateTransactionStatusById
+      summary: Simulate transaction status change by Thunes ID
+      description: For pre-production/testing only. This GET request intentionally mutates simulated state, as documented
+        by Thunes.
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      - $ref: '#/components/parameters/SimulationStatusName'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/simulation/transactions/ext-{external_id}/{status_name}:
+    get:
+      tags:
+      - Simulation
+      operationId: simulateTransactionStatusByExternalId
+      summary: Simulate transaction status change by external ID
+      description: For pre-production/testing only. This GET request intentionally mutates simulated state, as documented
+        by Thunes.
+      parameters:
+      - $ref: '#/components/parameters/ExternalId'
+      - $ref: '#/components/parameters/SimulationStatusName'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/rfis:
+    get:
+      tags:
+      - RFIs
+      operationId: listRFIs
+      summary: List requests for information
+      parameters:
+      - $ref: '#/components/parameters/RFIFromDate'
+      - $ref: '#/components/parameters/RFIToDate'
+      - $ref: '#/components/parameters/RFILimit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: List of RFI objects
+          headers:
+            X-Next-Cursor:
+              $ref: '#/components/headers/X-Next-Cursor'
+            X-Next-Url:
+              $ref: '#/components/headers/X-Next-Url'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RFI'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/rfis/{id}:
+    get:
+      tags:
+      - RFIs
+      operationId: getRFI
+      summary: Retrieve RFI by ID
+      parameters:
+      - $ref: '#/components/parameters/RFIId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFI'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/rfis/{id}/attachments:
+    post:
+      tags:
+      - RFIs
+      operationId: addRFIAttachment
+      summary: Upload requested RFI attachment
+      description: multipart/form-data; max 8 MB per attachment. The number of files cannot exceed the requested
+        documents.
+      parameters:
+      - $ref: '#/components/parameters/RFIId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 64
+                type:
+                  $ref: '#/components/schemas/AttachmentType'
+                file:
+                  type: string
+                  format: binary
+              required:
+              - name
+              - type
+              - file
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFIAttachment'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/rfis/{id}/information:
+    patch:
+      tags:
+      - RFIs
+      operationId: updateRFIInformation
+      summary: Provide information for RFI
+      parameters:
+      - $ref: '#/components/parameters/RFIId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRFIInformationRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFI'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v2/money-transfer/rfis/{id}/submit:
+    post:
+      tags:
+      - RFIs
+      operationId: submitRFI
+      summary: Submit RFI for review
+      parameters:
+      - $ref: '#/components/parameters/RFIId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RFI'
+        default:
+          description: Thunes error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Username is Thunes API key; password is Thunes API secret.
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        default: 1
+        minimum: 1
+      description: Page number (1-based).
+    PerPage:
+      name: per_page
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        default: 50
+        minimum: 1
+        maximum: 100
+      description: Items per page.
+    CountryIsoCode:
+      name: country_iso_code
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 3
+    Currency:
+      name: currency
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 3
+    PayerId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int32
+    QuotationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    TransactionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ExternalId:
+      name: external_id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 64
+    BalanceId:
+      name: balance_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int32
+    ReportId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    FileId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    RFIId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    TransactionType:
+      name: transaction_type
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/TransactionType'
+    SimulationStatusName:
+      name: status_name
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Target status name (case-insensitive).
+    SwiftBicCode:
+      name: swift_bic_code
+      in: path
+      required: true
+      schema:
+        type: string
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+    MovementFromDate:
+      name: from_date
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Start time; documented requests use ISO 8601 timestamps with Z.
+    MovementToDate:
+      name: to_date
+      in: query
+      required: true
+      schema:
+        type: string
+      description: End time, within 24 hours of from_date.
+    MovementLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        default: 100
+        maximum: 200
+    RFIFromDate:
+      name: from_date
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Start time in documented timestamp format.
+    RFIToDate:
+      name: to_date
+      in: query
+      required: true
+      schema:
+        type: string
+      description: End time in documented timestamp format.
+    RFILimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        default: 50
+        maximum: 100
+    ReportFromDate:
+      name: from_date
+      in: query
+      required: false
+      schema:
+        type: string
+    ReportToDate:
+      name: to_date
+      in: query
+      required: false
+      schema:
+        type: string
+    ReportType:
+      name: report_type
+      in: query
+      required: false
+      schema:
+        type: string
+    ServiceId:
+      name: service_id
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+    SimulatedTransactionHeader:
+      name: x-simulated-transaction
+      in: header
+      required: false
+      schema:
+        type: boolean
+      description: Set to true when creating a transaction in pre-production to use transaction simulation (where
+        enabled).
+  headers:
+    X-Total:
+      description: Thunes pagination header
+      schema:
+        type: integer
+        format: int64
+    X-Total-Pages:
+      description: Thunes pagination header
+      schema:
+        type: integer
+        format: int32
+    X-Per-Page:
+      description: Thunes pagination header
+      schema:
+        type: integer
+        format: int32
+    X-Page:
+      description: Thunes pagination header
+      schema:
+        type: integer
+        format: int32
+    X-Next-Page:
+      description: Thunes pagination header
+      schema:
+        type: integer
+        format: int32
+    X-Prev-Page:
+      description: Thunes pagination header
+      schema:
+        type: integer
+        format: int32
+    X-Next-Cursor:
+      description: Cursor pagination header
+      schema:
+        type: string
+    X-Next-Url:
+      description: Cursor pagination header
+      schema:
+        type: string
+    x-simulated-transaction:
+      description: Present as true for simulated transactions.
+      schema:
+        type: boolean
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+    ErrorResponse:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Error'
+      required:
+      - errors
+    PingResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - up
+      required:
+      - status
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        name:
+          type: string
+    Country:
+      type: object
+      properties:
+        iso_code:
+          type: string
+          maxLength: 3
+        name:
+          type: string
+    PayerSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        name:
+          type: string
+        currency:
+          type: string
+          maxLength: 3
+        country_iso_code:
+          type: string
+          maxLength: 3
+        service:
+          $ref: '#/components/schemas/Service'
+    RequiredCreditPartyInformation:
+      type: object
+      properties:
+        credit_party_identifiers_accepted:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Accepted alternative sets of account-identifier keys; first set is preferred.
+    RequiredCreditPartyVerification:
+      type: object
+      properties:
+        credit_party_identifiers_accepted:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Accepted alternative sets of identifier keys.
+        required_receiving_entity_fields:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Required alternatives for the receiving entity.
+    TransactionTypeInformation:
+      type: object
+      properties:
+        minimum_transaction_amount:
+          type: number
+          nullable: true
+        maximum_transaction_amount:
+          type: number
+          nullable: true
+        credit_party_identifiers_accepted:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Alternative sets of identifiers; select one complete set and prefer the first.
+        required_sending_entity_fields:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Payer-specific required field combinations.
+        required_receiving_entity_fields:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Payer-specific required field combinations.
+        required_documents:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+          description: Payer-specific required document combinations.
+        credit_party_information:
+          $ref: '#/components/schemas/RequiredCreditPartyInformation'
+        credit_party_verification:
+          $ref: '#/components/schemas/RequiredCreditPartyVerification'
+        purpose_of_remittance_values_accepted:
+          type: array
+          items:
+            type: string
+          description: Empty array means every purpose is accepted.
+    Payer:
+      type: object
+      description: Payer configuration determines required entity fields, accepted credit-party identifier combinations
+        and limits.
+      properties:
+        id:
+          type: integer
+          format: int32
+        name:
+          type: string
+        precision:
+          type: integer
+          format: int32
+        increment:
+          type: number
+        currency:
+          type: string
+          maxLength: 3
+        country_iso_code:
+          type: string
+          maxLength: 3
+        service:
+          $ref: '#/components/schemas/Service'
+        transaction_types:
+          type: object
+          properties:
+            C2C:
+              $ref: '#/components/schemas/TransactionTypeInformation'
+            C2B:
+              $ref: '#/components/schemas/TransactionTypeInformation'
+            B2C:
+              $ref: '#/components/schemas/TransactionTypeInformation'
+            B2B:
+              $ref: '#/components/schemas/TransactionTypeInformation'
+        minimum_transaction_amount:
+          type: number
+          nullable: true
+        maximum_transaction_amount:
+          type: number
+          nullable: true
+    Rate:
+      type: object
+      properties:
+        source_amount_min:
+          type: number
+        source_amount_max:
+          type: number
+          nullable: true
+        wholesale_fx_rate:
+          type: number
+    RatesByCurrency:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          $ref: '#/components/schemas/Rate'
+    PayerRates:
+      type: object
+      properties:
+        destination_currency:
+          type: string
+          maxLength: 3
+        rates:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/RatesByCurrency'
+    PayerIdLookupResult:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+    Balance:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        currency:
+          type: string
+          maxLength: 3
+        balance:
+          type: number
+        pending:
+          type: number
+        available:
+          type: number
+        credit_facility:
+          type: number
+    BalanceMovement:
+      type: object
+      properties:
+        balance_operation_number:
+          type: integer
+          format: int64
+        creation_date:
+          type: string
+        movement_type:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+          maxLength: 3
+        transaction_reference_id:
+          type: integer
+          format: int64
+          nullable: true
+        operation:
+          type: string
+        balance:
+          type: number
+        pending_balance:
+          type: number
+    BalanceTopupInstruction:
+      type: object
+      properties:
+        account_code:
+          type: string
+        account_number:
+          type: string
+        account_name:
+          type: string
+        iban:
+          type: string
+        account_address:
+          type: string
+        local_account_identifier_type:
+          type: string
+        local_account_identifier:
+          type: string
+        bank_name:
+          type: string
+        bank_address:
+          type: string
+        swift_code:
+          type: string
+        local_code_type:
+          type: string
+        local_code:
+          type: string
+        intermediary_bank_name:
+          type: string
+        intermediary_bank_swift_code:
+          type: string
+        correspondant_code:
+          type: string
+        update_date:
+          type: string
+        creation_date:
+          type: string
+    ReportFile:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        report_type:
+          type: string
+        file_type:
+          type: string
+        name:
+          type: string
+    Report:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          type: string
+        timezone:
+          type: string
+        cut_off_time:
+          type: string
+        report_date:
+          type: string
+        period_start:
+          type: string
+        period_end:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportFile'
+    ReportFileDownload:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Temporary signed download URL.
+    CreditPartyIdentifier:
+      type: object
+      description: Identifiers are strings to preserve leading zeros. Required keys and combinations are payer-specific.
+      properties:
+        msisdn:
+          type: string
+          minLength: 5
+          maxLength: 32
+        bank_account_number:
+          type: string
+          maxLength: 30
+        iban:
+          type: string
+          minLength: 14
+          maxLength: 34
+        clabe:
+          type: string
+          minLength: 18
+          maxLength: 18
+        cbu:
+          type: string
+          minLength: 22
+          maxLength: 22
+        cbu_alias:
+          type: string
+          maxLength: 20
+        swift_bic_code:
+          type: string
+          minLength: 8
+          maxLength: 11
+        bik_code:
+          type: string
+          maxLength: 11
+        ifs_code:
+          type: string
+          minLength: 11
+          maxLength: 11
+        sort_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+        aba_routing_number:
+          type: string
+          minLength: 9
+          maxLength: 9
+        bsb_number:
+          type: string
+          minLength: 6
+          maxLength: 6
+        branch_number:
+          type: string
+          maxLength: 12
+        routing_code:
+          type: string
+          minLength: 4
+          maxLength: 14
+        entity_tt_id:
+          type: string
+          maxLength: 32
+        account_type:
+          type: string
+          enum:
+          - CHECKING
+          - SAVINGS
+          - DEPOSIT
+          - OTHERS
+        account_number:
+          type: string
+          maxLength: 128
+        email:
+          type: string
+          maxLength: 64
+        card_number:
+          type: string
+          maxLength: 64
+        qr_code:
+          type: string
+          maxLength: 512
+    Sender:
+      type: object
+      description: For C2C/C2B. Required fields vary by payer and must be taken from payer.transaction_types.
+      properties:
+        lastname:
+          type: string
+          maxLength: 80
+        lastname2:
+          type: string
+          maxLength: 64
+        middlename:
+          type: string
+          maxLength: 64
+        firstname:
+          type: string
+          maxLength: 64
+        nativename:
+          type: string
+          maxLength: 64
+        nationality_country_iso_code:
+          type: string
+          maxLength: 3
+        code:
+          type: string
+          maxLength: 64
+        date_of_birth:
+          type: string
+          maxLength: 64
+        country_of_birth_iso_code:
+          type: string
+          maxLength: 3
+        gender:
+          type: string
+          enum:
+          - MALE
+          - FEMALE
+        address:
+          type: string
+          maxLength: 256
+        postal_code:
+          type: string
+          maxLength: 64
+        city:
+          type: string
+          maxLength: 64
+        country_iso_code:
+          type: string
+          maxLength: 3
+        msisdn:
+          type: string
+          maxLength: 64
+        email:
+          type: string
+          maxLength: 64
+        id_type:
+          type: string
+        id_country_iso_code:
+          type: string
+          maxLength: 3
+        id_number:
+          type: string
+          maxLength: 64
+        id_delivery_date:
+          type: string
+          maxLength: 64
+        id_expiration_date:
+          type: string
+          maxLength: 64
+        occupation:
+          type: string
+          maxLength: 80
+        province_state:
+          type: string
+          maxLength: 64
+        beneficiary_relationship:
+          type: string
+        source_of_funds:
+          type: string
+        bank_account_number:
+          type: string
+          maxLength: 80
+    Beneficiary:
+      type: object
+      description: For C2C/B2C. Required fields vary by payer and must be taken from payer.transaction_types.
+      properties:
+        lastname:
+          type: string
+          maxLength: 80
+        lastname2:
+          type: string
+          maxLength: 64
+        middlename:
+          type: string
+          maxLength: 64
+        firstname:
+          type: string
+          maxLength: 64
+        nativename:
+          type: string
+          maxLength: 64
+        nationality_country_iso_code:
+          type: string
+          maxLength: 3
+        code:
+          type: string
+          maxLength: 64
+        date_of_birth:
+          type: string
+          maxLength: 64
+        country_of_birth_iso_code:
+          type: string
+          maxLength: 3
+        gender:
+          type: string
+          enum:
+          - MALE
+          - FEMALE
+        address:
+          type: string
+          maxLength: 256
+        postal_code:
+          type: string
+          maxLength: 64
+        city:
+          type: string
+          maxLength: 64
+        country_iso_code:
+          type: string
+          maxLength: 3
+        msisdn:
+          type: string
+          maxLength: 64
+        email:
+          type: string
+          maxLength: 64
+        id_type:
+          type: string
+        id_country_iso_code:
+          type: string
+          maxLength: 3
+        id_number:
+          type: string
+          maxLength: 64
+        id_delivery_date:
+          type: string
+          maxLength: 64
+        id_expiration_date:
+          type: string
+          maxLength: 64
+        occupation:
+          type: string
+          maxLength: 80
+        province_state:
+          type: string
+          maxLength: 64
+        bank_account_holder_name:
+          type: string
+          maxLength: 144
+    SendingBusiness:
+      type: object
+      description: For B2C/B2B. Required fields vary by payer.
+      properties:
+        registered_name:
+          type: string
+          maxLength: 64
+        trading_name:
+          type: string
+          maxLength: 64
+        address:
+          type: string
+          maxLength: 256
+        postal_code:
+          type: string
+          maxLength: 64
+        city:
+          type: string
+          maxLength: 64
+        province_state:
+          type: string
+          maxLength: 64
+        country_iso_code:
+          type: string
+          maxLength: 3
+        msisdn:
+          type: string
+          maxLength: 64
+        email:
+          type: string
+          maxLength: 64
+        registration_number:
+          type: string
+          maxLength: 64
+        tax_id:
+          type: string
+          maxLength: 64
+        date_of_incorporation:
+          type: string
+          maxLength: 64
+        representative_lastname:
+          type: string
+          maxLength: 64
+        representative_lastname2:
+          type: string
+          maxLength: 64
+        representative_firstname:
+          type: string
+          maxLength: 64
+        representative_middlename:
+          type: string
+          maxLength: 64
+        representative_nativename:
+          type: string
+          maxLength: 64
+        representative_id_type:
+          type: string
+          maxLength: 64
+        representative_id_country_iso_code:
+          type: string
+          maxLength: 3
+        representative_id_number:
+          type: string
+          maxLength: 64
+        representative_id_delivery_date:
+          type: string
+          maxLength: 64
+        representative_id_expiration_date:
+          type: string
+          maxLength: 64
+        code:
+          type: string
+          maxLength: 64
+        business_relationship:
+          type: string
+          maxLength: 64
+    ReceivingBusiness:
+      type: object
+      description: For C2B/B2B. Required fields vary by payer.
+      properties:
+        registered_name:
+          type: string
+          maxLength: 64
+        trading_name:
+          type: string
+          maxLength: 64
+        address:
+          type: string
+          maxLength: 64
+        postal_code:
+          type: string
+          maxLength: 64
+        city:
+          type: string
+          maxLength: 64
+        province_state:
+          type: string
+          maxLength: 64
+        country_iso_code:
+          type: string
+          maxLength: 3
+        msisdn:
+          type: string
+          maxLength: 64
+        email:
+          type: string
+          maxLength: 64
+        registration_number:
+          type: string
+          maxLength: 64
+        tax_id:
+          type: string
+          maxLength: 64
+        date_of_incorporation:
+          type: string
+          maxLength: 64
+        representative_lastname:
+          type: string
+          maxLength: 64
+        representative_lastname2:
+          type: string
+          maxLength: 64
+        representative_firstname:
+          type: string
+          maxLength: 64
+        representative_middlename:
+          type: string
+          maxLength: 64
+        representative_nativename:
+          type: string
+          maxLength: 64
+        representative_id_type:
+          type: string
+          maxLength: 64
+        representative_id_country_iso_code:
+          type: string
+          maxLength: 3
+        representative_id_number:
+          type: string
+          maxLength: 64
+        representative_id_delivery_date:
+          type: string
+          maxLength: 64
+        representative_id_expiration_date:
+          type: string
+          maxLength: 64
+    Source:
+      type: object
+      properties:
+        country_iso_code:
+          type: string
+          maxLength: 3
+        currency:
+          type: string
+          description: ISO 4217 currency or supported stablecoin USDT/USDC.
+        amount:
+          type: number
+          description: Required in SOURCE_AMOUNT quotations; omit or use null otherwise.
+          nullable: true
+      required:
+      - country_iso_code
+      - currency
+    Destination:
+      type: object
+      properties:
+        currency:
+          type: string
+          description: ISO 4217 currency or supported stablecoin USDT/USDC.
+        amount:
+          type: number
+          description: Required in DESTINATION_AMOUNT quotations; omit or use null otherwise.
+          nullable: true
+      required:
+      - currency
+    MoneyAmount:
+      type: object
+      properties:
+        currency:
+          type: string
+        amount:
+          type: number
+    TransactionType:
+      type: string
+      enum:
+      - C2C
+      - C2B
+      - B2C
+      - B2B
+    QuotationMode:
+      type: string
+      enum:
+      - SOURCE_AMOUNT
+      - DESTINATION_AMOUNT
+    CreateQuotationRequest:
+      type: object
+      description: SOURCE_AMOUNT requires source.amount; DESTINATION_AMOUNT requires destination.amount. Set the
+        other amount to null or omit it.
+      properties:
+        external_id:
+          type: string
+          maxLength: 64
+        payer_id:
+          type: integer
+          format: int32
+        mode:
+          $ref: '#/components/schemas/QuotationMode'
+        transaction_type:
+          $ref: '#/components/schemas/TransactionType'
+        source:
+          $ref: '#/components/schemas/Source'
+        destination:
+          $ref: '#/components/schemas/Destination'
+      required:
+      - external_id
+      - payer_id
+      - mode
+      - transaction_type
+      - source
+      - destination
+    Quotation:
+      type: object
+      description: Datetime values are left as strings because documented examples mix timestamps with and without
+        timezone offsets.
+      properties:
+        id:
+          type: integer
+          format: int64
+        external_id:
+          type: string
+          maxLength: 64
+        payer:
+          $ref: '#/components/schemas/PayerSummary'
+        mode:
+          $ref: '#/components/schemas/QuotationMode'
+        transaction_type:
+          $ref: '#/components/schemas/TransactionType'
+        source:
+          $ref: '#/components/schemas/Source'
+        destination:
+          $ref: '#/components/schemas/Destination'
+        sent_amount:
+          $ref: '#/components/schemas/MoneyAmount'
+        wholesale_fx_rate:
+          type: number
+        fee:
+          $ref: '#/components/schemas/MoneyAmount'
+        creation_date:
+          type: string
+        expiration_date:
+          type: string
+    CreateTransactionRequest:
+      type: object
+      description: Based on quotation type, include sender+beneficiary (C2C), sender+receiving_business (C2B), sending_business+beneficiary
+        (B2C), or sending_business+receiving_business (B2B). document_reference_number is also mandatory for B2B.
+        Other entity fields vary by payer.
+      properties:
+        credit_party_identifier:
+          $ref: '#/components/schemas/CreditPartyIdentifier'
+        retail_rate:
+          type: number
+        retail_fee:
+          type: number
+        retail_fee_currency:
+          type: string
+          maxLength: 3
+        sender:
+          $ref: '#/components/schemas/Sender'
+        beneficiary:
+          $ref: '#/components/schemas/Beneficiary'
+        sending_business:
+          $ref: '#/components/schemas/SendingBusiness'
+        receiving_business:
+          $ref: '#/components/schemas/ReceivingBusiness'
+        external_id:
+          type: string
+          maxLength: 64
+        external_code:
+          type: string
+          maxLength: 64
+        callback_url:
+          type: string
+        purpose_of_remittance:
+          type: string
+          maxLength: 64
+        document_reference_number:
+          type: string
+          maxLength: 64
+        additional_information_1:
+          type: string
+          maxLength: 64
+        additional_information_2:
+          type: string
+          maxLength: 64
+        additional_information_3:
+          type: string
+          maxLength: 64
+        reference:
+          type: string
+          maxLength: 16
+      required:
+      - credit_party_identifier
+      - external_id
+      - purpose_of_remittance
+    Transaction:
+      type: object
+      description: The same shape is used for transaction GET results, confirmation/cancellation responses and callbacks.
+        Fields may be null or absent based on transaction type and payer.
+      properties:
+        id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          maxLength: 5
+          description: Five-digit status code; kept as string because Thunes may add codes.
+        status_message:
+          type: string
+          maxLength: 64
+        status_class:
+          type: string
+          maxLength: 1
+        status_class_message:
+          type: string
+          maxLength: 64
+        external_id:
+          type: string
+          maxLength: 64
+        external_code:
+          type: string
+          maxLength: 64
+        transaction_type:
+          $ref: '#/components/schemas/TransactionType'
+        payer_transaction_reference:
+          type: string
+          maxLength: 64
+        payer_transaction_code:
+          type: string
+          maxLength: 64
+        creation_date:
+          type: string
+        expiration_date:
+          type: string
+        credit_party_identifier:
+          $ref: '#/components/schemas/CreditPartyIdentifier'
+        source:
+          $ref: '#/components/schemas/Source'
+        destination:
+          $ref: '#/components/schemas/Destination'
+        payer:
+          $ref: '#/components/schemas/PayerSummary'
+        sender:
+          $ref: '#/components/schemas/Sender'
+        beneficiary:
+          $ref: '#/components/schemas/Beneficiary'
+        sending_business:
+          $ref: '#/components/schemas/SendingBusiness'
+        receiving_business:
+          $ref: '#/components/schemas/ReceivingBusiness'
+        callback_url:
+          type: string
+        sent_amount:
+          $ref: '#/components/schemas/MoneyAmount'
+        wholesale_fx_rate:
+          type: number
+        retail_rate:
+          type: number
+          nullable: true
+        retail_fee:
+          type: number
+          nullable: true
+        retail_fee_currency:
+          type: string
+          maxLength: 3
+        fee:
+          $ref: '#/components/schemas/MoneyAmount'
+        purpose_of_remittance:
+          type: string
+          maxLength: 64
+        document_reference_number:
+          type: string
+          maxLength: 64
+        additional_information_1:
+          type: string
+          maxLength: 64
+        additional_information_2:
+          type: string
+          maxLength: 64
+        additional_information_3:
+          type: string
+          maxLength: 64
+        reference:
+          type: string
+    CreditPartyInformationRequest:
+      type: object
+      properties:
+        credit_party_identifier:
+          $ref: '#/components/schemas/CreditPartyIdentifier'
+      required:
+      - credit_party_identifier
+    CreditPartyInformationResponse:
+      type: object
+      description: Thunes documentation example returns an id and a beneficiary wrapper; the prose also describes
+        the returned beneficiary/business object. Preserve unrecognized fields in runtime JSON mapping.
+      properties:
+        id:
+          type: integer
+          format: int64
+        beneficiary:
+          $ref: '#/components/schemas/Beneficiary'
+        receiving_business:
+          $ref: '#/components/schemas/ReceivingBusiness'
+    CreditPartyVerificationRequest:
+      type: object
+      description: Beneficiary/receiving_business fields may be required depending on the payer.
+      properties:
+        credit_party_identifier:
+          $ref: '#/components/schemas/CreditPartyIdentifier'
+        beneficiary:
+          $ref: '#/components/schemas/Beneficiary'
+        receiving_business:
+          $ref: '#/components/schemas/ReceivingBusiness'
+      required:
+      - credit_party_identifier
+    CreditPartyVerificationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        account_status:
+          type: string
+          description: Documented values include AVAILABLE, UNREGISTERED and UNAVAILABLE variants.
+      required:
+      - id
+      - account_status
+    AttachmentType:
+      type: string
+      description: 'Documented values: invoice, purchase_order, delivery_slip, contract, customs_declaration, bill_of_lading,
+        others, identification_documents, proof_of_address, proof_of_source_of_funds, registration_documents. Kept
+        as string to tolerate future additive attachment types.'
+    TransactionAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        content_type:
+          type: string
+        name:
+          type: string
+        transaction_id:
+          type: integer
+          format: int64
+        type:
+          $ref: '#/components/schemas/AttachmentType'
+    RFIAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        content_type:
+          type: string
+        name:
+          type: string
+        rfi_id:
+          type: integer
+          format: int64
+        type:
+          $ref: '#/components/schemas/AttachmentType'
+    RFIRequestedInformation:
+      type: object
+      properties:
+        sender:
+          type: array
+          items:
+            type: string
+        beneficiary:
+          type: array
+          items:
+            type: string
+        sending_business:
+          type: array
+          items:
+            type: string
+        receiving_business:
+          type: array
+          items:
+            type: string
+        others:
+          type: array
+          items:
+            type: string
+    RFIProvidedInformation:
+      type: object
+      description: RFI information is payer-/request-specific; dynamic field names may include keys not defined
+        on normal Sender/Beneficiary resources.
+      properties:
+        sender:
+          type: object
+          additionalProperties: {}
+        beneficiary:
+          type: object
+          additionalProperties: {}
+        sending_business:
+          type: object
+          additionalProperties: {}
+        receiving_business:
+          type: object
+          additionalProperties: {}
+        others:
+          type: object
+          additionalProperties: {}
+    RFI:
+      type: object
+      description: The documents property is excluded from the list-RFIs response; retrieve an RFI by ID for attachments.
+      properties:
+        id:
+          type: integer
+          format: int64
+        transaction_id:
+          type: integer
+          format: int64
+        transaction_external_id:
+          type: string
+        status:
+          type: string
+        status_message:
+          type: string
+        creation_date:
+          type: string
+        expiration_date:
+          type: string
+        requested_information:
+          $ref: '#/components/schemas/RFIRequestedInformation'
+        requested_documents:
+          type: array
+          items:
+            type: string
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/RFIAttachment'
+        information:
+          $ref: '#/components/schemas/RFIProvidedInformation'
+        description:
+          type: string
+        comments:
+          type: string
+    UpdateRFIInformationRequest:
+      type: object
+      properties:
+        information:
+          $ref: '#/components/schemas/RFIProvidedInformation'
+        comments:
+          type: string
+          maxLength: 256
+      required:
+      - information
+    PossibleTransitions:
+      type: object
+      description: Map from five-digit status codes to their status names.
+      additionalProperties:
+        type: string
