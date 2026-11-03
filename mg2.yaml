@@ -1,0 +1,112 @@
+# MoneyGram unified OpenAPI reference composition. Uses remote $refs to official MoneyGram YAMLs.
+# Source commit: 821daa435f5bf919763b0427b207d9ee480e6277 (2025-08-14).
+# Online resolution is required. For fully self-contained generation, use MoneyGram's source YAMLs individually.
+openapi: 3.0.3
+info:
+  title: MoneyGram APIs - Unified Client Entry Point
+  version: 1.0.0
+  description: 'Composition of 11 MoneyGram-published OpenAPI 3.0 YAML specifications (as of 2025-08-14) in its official developer
+    GitLab repository. Every path is an external Path Item Reference to MoneyGram''s own request/response schema
+    definitions, enums, errors and parameters. External references must be resolved at code-generation time with
+    access to gitlab.com. This is not a self-contained or complete representation of all MoneyGram modules: some
+    newer endpoints (for example, business disbursements) are not represented in those 11 published YAML files.
+    MoneyGram''s specifications are pinned to the official 2025-08-14 source commit for reproducibility. MoneyGram authentication uses GET /oauth/accesstoken
+    with Basic credentials and grant_type=client_credentials; the regular endpoints use Bearer tokens. For maximum
+    compatibility, prefer generating each official MoneyGram module independently if the generator cannot resolve
+    external Path Item references.'
+  contact:
+    name: MoneyGram Developer Support
+    email: developersupport@moneygram.com
+externalDocs:
+  description: MoneyGram official API reference
+  url: https://developer.moneygram.com/moneygram-developer/reference
+servers:
+- url: https://sandboxapi.moneygram.com
+  description: MoneyGram sandbox (per current documentation)
+- url: https://api.moneygram.com
+  description: MoneyGram production (per current documentation)
+paths:
+  /oauth/accesstoken:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/access-token.yaml#/paths/~1accesstoken
+  /transfer/v1/transactions/quote:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-transfers.yaml#/paths/~1transactions~1quote
+  /transfer/v1/transactions:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-transfers.yaml#/paths/~1transactions
+  /transfer/v1/transactions/{transactionId}:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-transfers.yaml#/paths/~1transactions~1{transactionId}
+  /transfer/v1/transactions/{transactionId}/commit:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-transfers.yaml#/paths/~1transactions~1{transactionId}~1commit
+  /status/v1/transactions:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-status.yaml#/paths/~1transactions
+  /status/v1/transactions/{transactionId}:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-status.yaml#/paths/~1transactions~1{transactionId}
+  /refund/v2/transactions:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-refund.yaml#/paths/~1transactions
+  /refund/v2/transactions/{transactionId}:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-refund.yaml#/paths/~1transactions~1{transactionId}
+  /refund/v2/transactions/{transactionId}/commit:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-refund.yaml#/paths/~1transactions~1{transactionId}~1commit
+  /amend/v1/transactions:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-amend.yaml#/paths/~1transactions
+  /amend/v1/transactions/{transactionId}:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-amend.yaml#/paths/~1transactions~1{transactionId}
+  /amend/v1/transactions/{transactionId}/receiver/name:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-amend.yaml#/paths/~1transactions~1{transactionId}~1receiver~1name
+  /amend/v1/transactions/{transactionId}/receiver/additional-data:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-amend.yaml#/paths/~1transactions~1{transactionId}~1receiver~1additional-data
+  /amend/v1/transactions/{transactionId}/sender/additional-data:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-amend.yaml#/paths/~1transactions~1{transactionId}~1sender~1additional-data
+  /payout/v1/transactions:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-payout.yaml#/paths/~1transactions
+  /payout/v1/transactions/{transactionId}:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-payout.yaml#/paths/~1transactions~1{transactionId}
+  /payout/v1/transactions/{transactionId}/additionalInformation:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-payout.yaml#/paths/~1transactions~1{transactionId}~1additionalInformation
+  /payout/v1/transactions/{transactionId}/commit:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-payout.yaml#/paths/~1transactions~1{transactionId}~1commit
+  /payout/v1/transactions/{transactionId}/reverse:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-payout.yaml#/paths/~1transactions~1{transactionId}~1reverse
+  /reference-data/v1/account-deposit-fields:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-reference-data.yaml#/paths/~1account-deposit-fields
+  /reference-data/v1/countries:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-reference-data.yaml#/paths/~1countries
+  /reference-data/v1/countries/{iso3Code}:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-reference-data.yaml#/paths/~1countries~1{iso3Code}
+  /reference-data/v1/currencies:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-reference-data.yaml#/paths/~1currencies
+  /reference-data/v1/enumerations:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-reference-data.yaml#/paths/~1enumerations
+  /reference-data/v1/identification-documents:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-reference-data.yaml#/paths/~1identification-documents
+  /reference-data/v1/service-options:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-reference-data.yaml#/paths/~1service-options
+  /fx-rate/v1/rates:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-fxrate.yaml#/paths/~1rates
+  /agentlocator/v2/locations:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-locator.yaml#/paths/~1locations
+  /consumer/v1/profiles/{profileId}:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-consumer.yaml#/paths/~1profiles~1{profileId}
+  /consumer/v1/profiles:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-consumer.yaml#/paths/~1profiles
+  /consumer/v1/profiles/transactions:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-consumer.yaml#/paths/~1profiles~1transactions
+  /consumer/v1/profiles/transactions/paginateByOffset:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-consumer.yaml#/paths/~1profiles~1transactions~1paginateByOffset
+  /consumer/v1/profiles/transactions/paginateByCursor:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-consumer.yaml#/paths/~1profiles~1transactions~1paginateByCursor
+  /consumer/v2/profiles:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-consumer-transaction-history.yaml#/paths/~1profiles
+  /consumer/v2/profiles/{profileId}/transactions:
+    $ref: https://gitlab.com/moneygram-devportal1/mapi/-/raw/821daa435f5bf919763b0427b207d9ee480e6277/yaml_files/mapi-consumer-transaction-history.yaml#/paths/~1profiles~1{profileId}~1transactions
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: 'MoneyGram OAuth client credentials: MoneyGram publishes a GET token endpoint with an Authorization:
+        Basic header. Some generators assume a POST token exchange; implement token fetching separately when needed.'
+      flows:
+        clientCredentials:
+          tokenUrl: https://sandboxapi.moneygram.com/oauth/accesstoken?grant_type=client_credentials
+          scopes:
+            read: Grants read access
+            write: Grants write access
