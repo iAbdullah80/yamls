@@ -1,0 +1,3689 @@
+openapi: 3.0.3
+info: {title: MoneyGram Developer APIs, version: 1.0.0, description: 'Unofficial consolidated OpenAPI description of the MoneyGram developer APIs (https://developer.moneygram.com/moneygram-developer/reference). Each API area keeps its own versioned base path (for example /transfer/v1, /refund/v2). Send X-MG-ClientRequestId (a UUID) on every call: it is used for request tracing and idempotency.'}
+servers:
+- {url: 'https://sandboxapi.moneygram.com', description: Sandbox}
+- {url: 'https://api.moneygram.com', description: Production}
+tags:
+- {name: Authentication, description: OAuth2 token endpoint.}
+- {name: Transfer, description: 'Send money: quote, update/validate, create and commit transactions.'}
+- {name: Status, description: Transaction status lookup.}
+- {name: Refund, description: Look up and refund transactions.}
+- {name: Amend, description: Amend receiver details of a transaction.}
+- {name: Payout, description: Pay out (receive) transactions.}
+- {name: Disbursement, description: Business (B2C) disbursements.}
+- {name: DisbursementStatus, description: Business disbursement status lookup.}
+- {name: DisbursementRefund, description: Business disbursement refunds.}
+- {name: AgentLocator, description: Agent location search.}
+- {name: Agent, description: Agent information.}
+- {name: FxRate, description: Foreign-exchange rates.}
+- {name: ReferenceData, description: 'Reference data: countries, currencies, service options, fields and more.'}
+- {name: ConsumerProfiles, description: Consumer profile management.}
+- {name: BusinessProfiles, description: Business profile management.}
+paths:
+  /oauth/accesstoken:
+    get:
+      tags: [Authentication]
+      summary: Get Access Token
+      description: Exchanges the partner client id and secret (sent as HTTP Basic credentials) for an OAuth2 bearer token. The token endpoint is called with GET and grant_type=client_credentials.
+      operationId: getAccessToken
+      security:
+      - BasicAuth: []
+      parameters:
+      - in: query
+        name: grant_type
+        required: true
+        schema:
+          type: string
+          enum: [client_credentials]
+      responses:
+        '200':
+          description: Successful response
+          headers: &id001
+            X-MG-SessionId:
+              required: false
+              schema: {type: string}
+            X-MG-ClientRequestId:
+              required: false
+              schema: {type: string}
+            X-MG-RequestId:
+              required: false
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetAccessTokenResponse'}
+        '400': {$ref: '#/components/responses/BadRequestErrorAccessToken'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorAccessToken'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorAccessToken'}
+        '500': {$ref: '#/components/responses/InternalServerErrorAccessToken'}
+  /transfer/v1/transactions/quote:
+    post:
+      tags: [Transfer]
+      summary: Quote a Transaction
+      description: Requests a quote for a send transaction, specified either by send amount or by receive amount.
+      operationId: instructPayoutTransactionQuote
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdRequired'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/quoteBySendAmountRequest'}
+              - {$ref: '#/components/schemas/quoteByReceiveAmountRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/quoteResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /transfer/v1/transactions/{transactionId}:
+    put:
+      tags: [Transfer]
+      summary: Update a Transaction
+      description: Updates a quoted send transaction with sender, receiver and compliance details and validates it.
+      operationId: instructPayoutTransactionUpdateAndValidate
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdRequired'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/transactBySendAmountRequest'}
+              - {$ref: '#/components/schemas/transactByReceiveAmountRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/transactResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /transfer/v1/transactions/{transactionId}/commit:
+    put:
+      tags: [Transfer]
+      summary: Commit a Transaction
+      description: Commits a validated send transaction.
+      operationId: instructPayoutTransactionCommit
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdRequired'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/commitRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/commitResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /transfer/v1/transactions:
+    post:
+      tags: [Transfer]
+      summary: Create a Transaction
+      description: Creates a send transaction from a send-amount or receive-amount request.
+      operationId: instructPayoutTransactionCreate
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdRequired'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/transactBySendAmountRequest'}
+              - {$ref: '#/components/schemas/transactByReceiveAmountRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/transactResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /status/v1/transactions:
+    get:
+      tags: [Status]
+      summary: Retrieve a Transaction by Reference Number
+      description: Retrieves the status and details of a transaction by its reference number.
+      operationId: transactionLookupWithReferenceNumber
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/ReferenceNumber'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetTransactionResponse'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /status/v1/transactions/{transactionId}:
+    get:
+      tags: [Status]
+      summary: Retrieve a Transaction by Transaction ID
+      description: Retrieves the status and details of a transaction by its transaction id.
+      operationId: transactionLookup
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetTransactionResponse'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /refund/v2/transactions:
+    get:
+      tags: [Refund]
+      summary: Retrieve a Transaction by Reference Number
+      description: Retrieves a transaction by reference number for the purpose of refunding it.
+      operationId: refundTransactionLookupWithReferenceNumber
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/ReferenceNumber'}
+      - {$ref: '#/components/parameters/RefundReasonCode'}
+      - in: query
+        name: refundFee
+        schema: {type: boolean}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetTransactionResponseRefund'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /refund/v2/transactions/{transactionId}:
+    get:
+      tags: [Refund]
+      summary: Retrieve a Transaction by Transaction ID
+      description: Retrieves a transaction by transaction id for the purpose of refunding it.
+      operationId: refundTransactionLookup
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      - {$ref: '#/components/parameters/RefundReasonCode'}
+      - in: query
+        name: refundFee
+        schema: {type: boolean}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetTransactionResponseRefund'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /refund/v2/transactions/{transactionId}/commit:
+    put:
+      tags: [Refund]
+      summary: Commit a Transaction
+      description: Commits a refund for a transaction.
+      operationId: createOrUpdateTransactionRequest
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/MGSessionId'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/commitRequestRefund'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/commitResponseRefund'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /amend/v1/transactions:
+    get:
+      tags: [Amend]
+      summary: Retrieve a Transaction by Reference Number
+      description: Retrieves a transaction by reference number for the purpose of amending it.
+      operationId: amendTransactionLookupWithReferenceNumber
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/ReferenceNumber'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetTransactionResponseAmend'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /amend/v1/transactions/{transactionId}:
+    get:
+      tags: [Amend]
+      summary: Retrieve a Transaction by Transaction ID
+      description: Retrieves a transaction by transaction id for the purpose of amending it.
+      operationId: amendTransactionLookup
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetTransactionResponseAmend'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /amend/v1/transactions/{transactionId}/receiver/name:
+    patch:
+      tags: [Amend]
+      summary: Modify a Receiver's Name
+      description: Modifies the receiver name on a transaction.
+      operationId: amendReceiverName
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/MGSessionId'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/amendNameRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/amendTransactionResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /amend/v1/transactions/{transactionId}/receiver/additional-data:
+    patch:
+      tags: [Amend]
+      summary: Modify a Receiver's Additional Data
+      description: Modifies the receiver additional data on a transaction.
+      operationId: amendReceiverAdditionalData
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/MGSessionId'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/amendReceiverRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/amendTransactionResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /payout/v1/transactions:
+    get:
+      tags: [Payout]
+      summary: Retrieve a Transaction by Reference Number
+      description: Retrieves a transaction to be paid out, by reference number.
+      operationId: receiveTransactionLookupWithReferenceNumber
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/ReferenceNumber'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetTransactionResponsePayout'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /payout/v1/transactions/{transactionId}:
+    put:
+      tags: [Payout]
+      summary: Update a Transaction
+      description: Updates and validates a transaction that is being paid out.
+      operationId: validatePayoutTransaction
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/MGSessionId'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PayoutRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PayoutResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /payout/v1/transactions/{transactionId}/additionalInformation:
+    get:
+      tags: [Payout]
+      summary: Retrieve Additional Information
+      description: Retrieves additional (compliance) information required to pay out a transaction.
+      operationId: receiveTransactionLookup
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/MGSessionId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetComplianceResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /payout/v1/transactions/{transactionId}/commit:
+    put:
+      tags: [Payout]
+      summary: Commit a Transaction
+      description: Commits the payout of a transaction.
+      operationId: commitPayout
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/MGSessionId'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/commitPayoutRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/commitPayoutResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /payout/v1/transactions/{transactionId}/reverse:
+    put:
+      tags: [Payout]
+      summary: Reversal of a transaction
+      description: Reverses a payout transaction.
+      operationId: payoutReversal
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/reversalRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/reversalResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/v1/transactions/quote:
+    post:
+      tags: [Disbursement]
+      summary: Quote a transaction
+      description: Requests a quote for a business (B2C) disbursement, by send amount or by receive amount.
+      operationId: disbursementInstructPayoutTransactionQuote
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/quoteBySendAmountRequestDisbursement'}
+              - {$ref: '#/components/schemas/quoteByReceiveAmountRequestDisbursement'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/quoteResponseDisbursement'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/v1/transactions/{transactionId}:
+    put:
+      tags: [Disbursement]
+      summary: Update a transaction
+      description: Updates a quoted business disbursement with details and validates it.
+      operationId: disbursementInstructPayoutTransactionUpdateAndValidate
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/transactBySendAmountRequestDisbursement'}
+              - {$ref: '#/components/schemas/transactByReceiveAmountRequestDisbursement'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/transactResponseDisbursement'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/v1/transactions/{transactionId}/commit:
+    put:
+      tags: [Disbursement]
+      summary: Commit a transaction
+      description: Commits a validated business disbursement.
+      operationId: disbursementInstructPayoutTransactionCommit
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/commitRequestDisbursement'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/commitResponseDisbursement'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/v1/transactions:
+    post:
+      tags: [Disbursement]
+      summary: Create a transaction with auto commit.
+      description: Creates a business disbursement and commits it automatically.
+      operationId: disbursementInstructPayoutTransactionCreate
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/transactBySendAmountRequestAutoCommit'}
+              - {$ref: '#/components/schemas/transactByReceiveAmountRequestAutoCommit'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/transactResponseAutoCommit'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/v1/transactions/async:
+    post:
+      tags: [Disbursement]
+      summary: Create a transaction with auto commit and process the transaction asynchronously.
+      description: Creates a business disbursement, commits it automatically and processes it asynchronously.
+      operationId: instructPayoutTransactionCreateAsync
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - {$ref: '#/components/schemas/transactBySendAmountAsyncRequest'}
+              - {$ref: '#/components/schemas/transactByReceiveAmountAsyncRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/transactResponseAsynchronous'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/status/v1/transactions:
+    get:
+      tags: [DisbursementStatus]
+      summary: Retrieve a Transaction
+      description: Retrieves a business disbursement by reference number.
+      operationId: disbursementTransactionLookupWithReferenceNumber
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/ReferenceNumber'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetBusinessTransactionResponse'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /disbursement/status/v1/transactions/{transactionId}:
+    get:
+      tags: [DisbursementStatus]
+      summary: Retrieve a Transaction
+      description: Retrieves a business disbursement by transaction id.
+      operationId: disbursementTransactionLookup
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetBusinessTransactionResponse'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /disbursement/status/v1/transactions/lite/{transactionId}:
+    get:
+      tags: [DisbursementStatus]
+      summary: Retrieve a Transaction Summary (Quick Response)
+      description: Retrieves a summary of a business disbursement by transaction id (quick response).
+      operationId: transactionLookupSummary
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetBusinessTransactionSummaryResponse'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /disbursement/refund/v1/transactions:
+    get:
+      tags: [DisbursementRefund]
+      summary: Retrieve a Transaction
+      description: Retrieves a business disbursement by reference number for the purpose of refunding it.
+      operationId: disbursementRefundTransactionLookupWithReferenceNumber
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/ReferenceNumber'}
+      - {$ref: '#/components/parameters/RefundReasonCode'}
+      - in: query
+        name: refundFee
+        schema: {type: boolean}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetBusinessTransactionResponseDisbursementRefund'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/refund/v1/transactions/{transactionId}:
+    get:
+      tags: [DisbursementRefund]
+      summary: Retrieve a Transaction
+      description: Retrieves a business disbursement by transaction id for the purpose of refunding it.
+      operationId: disbursementRefundTransactionLookup
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/TransactionId'}
+      - {$ref: '#/components/parameters/RefundReasonCode'}
+      - in: query
+        name: refundFee
+        schema: {type: boolean}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetBusinessTransactionResponseDisbursementRefund'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /disbursement/refund/v1/transactions/{transactionId}/commit:
+    put:
+      tags: [DisbursementRefund]
+      summary: Commit a Transaction
+      description: Commits a refund for a business disbursement.
+      operationId: disbursementCreateOrUpdateTransactionRequest
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/MGSessionId'}
+      - in: path
+        name: transactionId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/commitRequestDisbursementRefund'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/commitResponseRefund'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /agentlocator/v2/locations:
+    get:
+      tags: [AgentLocator]
+      summary: Retrieve Locations
+      description: Searches for MoneyGram agent locations near an address.
+      operationId: agentLocator
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - {$ref: '#/components/parameters/Address'}
+      - {$ref: '#/components/parameters/Country'}
+      - {$ref: '#/components/parameters/SearchRadius'}
+      - {$ref: '#/components/parameters/Limit'}
+      - {$ref: '#/components/parameters/TransactionAmount'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentLocatorResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /agent/v1/agentDFL:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    put:
+      tags: [Agent]
+      summary: Retrieve Agent DFL Information
+      description: Retrieves agent DFL information.
+      operationId: getAgentDFL
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AgentDFLRequest'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentDFLResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /fx-rate/v1/rates:
+    get:
+      tags: [FxRate]
+      summary: Retrieve FX Rates
+      description: Retrieves foreign-exchange rates and related details for a corridor.
+      operationId: retrieveFxRateAndDetails
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/OriginatingCountryCode'}
+      - {$ref: '#/components/parameters/DestinationCountryCode'}
+      - {$ref: '#/components/parameters/ServiceOptionCode'}
+      - {$ref: '#/components/parameters/SendCurrencyCode'}
+      - {$ref: '#/components/parameters/ReceiverCurrencyCode'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/fxRateResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /reference-data/v1/transaction-fields-send:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve Fields for a Transfer
+      description: Retrieves the fields required to send a transfer for the given corridor and service option.
+      operationId: transactionFieldsSend
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/DestinationCountryCode'}
+      - {$ref: '#/components/parameters/DestinationCountrySubdivisionCode'}
+      - {$ref: '#/components/parameters/TransactionIdQuery'}
+      - in: query
+        name: serviceOptionCode
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/ServiceOptionRoutingCode'}
+      - in: query
+        name: amount
+        required: true
+        schema: {type: number}
+      - in: query
+        name: sendCurrencyCode
+        required: true
+        schema: {type: string}
+      - in: query
+        name: receiveCurrencyCode
+        required: true
+        schema: {type: string}
+      - in: query
+        name: fundInStore
+        required: false
+        schema: {type: boolean}
+      - in: query
+        name: fundInStoreAgentPartnerId
+        required: false
+        schema: {type: string}
+      - in: query
+        name: targetAccountProfileId
+        required: false
+        schema: {type: string}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TransactionFields'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/transaction-fields-receive:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve Fields for a Payout
+      description: Retrieves the fields required to pay out a transfer.
+      operationId: transactionFieldsReceive
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/TransactionIdQuery'}
+      - in: query
+        name: referenceNumber
+        required: false
+        schema: {type: string}
+      - in: query
+        name: amount
+        required: true
+        schema: {type: number}
+      - in: query
+        name: receiveCurrencyCode
+        required: true
+        schema: {type: string}
+      - in: query
+        name: fundInStore
+        required: false
+        schema: {type: boolean}
+      - in: query
+        name: fundInStoreAgentPartnerId
+        required: false
+        schema: {type: string}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TransactionFieldsReceive'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/service-options:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve Service Options
+      description: Retrieves the available service options for a destination country.
+      operationId: serviceOptions
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - in: query
+        name: destinationCountryCode
+        schema: {type: string}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ServiceOptionDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/enumerations:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve Enumerations
+      description: Retrieves enumeration values used by other APIs.
+      operationId: enumerations
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - in: query
+        name: consumerCountryCode
+        schema: {type: string, minLength: 3, maxLength: 3}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/EnumerationDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/countries:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve Countries
+      description: Retrieves the supported countries.
+      operationId: countries
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CountryDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/countries/{iso3Code}:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve COuntries ISO3
+      description: Retrieves a single country by ISO 3166-1 alpha-3 code.
+      operationId: country
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - in: path
+        name: iso3Code
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CountryDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/currencies:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve Currencies
+      description: Retrieves the supported currencies.
+      operationId: currencies
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CurrencyDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/identification-documents:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve Identification Documents
+      description: Retrieves the accepted identification document types.
+      operationId: identificationDocuments
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/CountryCode'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/IdentificationDocumentDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/languages:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Languages
+      description: Retrieves the supported languages.
+      operationId: languageInfoAll
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LanguageInfoResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/languages/{languageLocalId}:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Languages for a Specific Language
+      description: Retrieves a single supported language by locale id.
+      operationId: languageInfoByLocaleId
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/LanguageLocalId'}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LanguageInfoResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /reference-data/v1/regulatorinformation:
+    servers:
+    - {url: 'https://extapi.moneygram.com'}
+    get:
+      tags: [ReferenceData]
+      summary: Get Retrieve State Regulator Information
+      description: Retrieves state regulator information.
+      operationId: regulatorinformation
+      security:
+      - OAuth2: [read]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - in: query
+        name: agentPartnerId
+        schema: {type: string}
+      - {$ref: '#/components/parameters/PosId'}
+      - {$ref: '#/components/parameters/OperatorId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - in: query
+        name: countryCode
+        schema: {type: string}
+        required: true
+      - in: query
+        name: dfJurisdiction
+        schema: {type: string}
+      responses:
+        '200':
+          description: Successful response
+          headers: *id001
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StateRegulatorDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestErrorStatus'}
+        '401': {$ref: '#/components/responses/UnauthorizedErrorStatus'}
+        '403': {$ref: '#/components/responses/ForbiddenErrorStatus'}
+        '500': {$ref: '#/components/responses/InternalServerErrorStatus'}
+  /consumer/v2/profiles:
+    post:
+      tags: [ConsumerProfiles]
+      summary: Create a Consumer Profile
+      description: Creates a consumer profile.
+      operationId: createConsumerProfile
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateConsumerProfileRequest'}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreateConsumerProfileResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /consumer/v2/profiles/{profileId}/transactions:
+    get:
+      tags: [ConsumerProfiles]
+      summary: Retrieve Transaction History
+      description: Retrieves the transaction history of a consumer profile within a date range.
+      operationId: getConsumerTransactionHistory
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - in: path
+        name: profileId
+        required: true
+        schema: {type: string}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - in: query
+        name: startDate
+        required: true
+        schema: {type: string, format: date}
+      - in: query
+        name: endDate
+        required: true
+        schema: {type: string, format: date}
+      - in: query
+        name: pageNumber
+        schema: {type: integer, minimum: 0}
+      - in: query
+        name: perPage
+        schema: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetConsumerTransactionHistoryResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /consumer/v2/profiles/search:
+    get:
+      tags: [ConsumerProfiles]
+      summary: Search for a consumer
+      description: Searches for consumer profiles.
+      operationId: getRetrieveConsumer
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - in: query
+        name: rewardsNumber
+        schema: {type: string}
+      - in: query
+        name: identificationType
+        schema:
+          type: string
+          enum: [Alien ID, Drivers License, Government ID, International ID, Passport, Social Security Number, State ID, Tax ID]
+      - in: query
+        name: identificationNumber
+        schema: {type: string}
+      - in: query
+        name: mobilePhone
+        schema: {type: string}
+      - in: query
+        name: maxProfilesToReturn
+        schema: {type: string}
+      - in: query
+        name: pageNumber
+        schema: {type: integer, minimum: 0}
+      - in: query
+        name: perPage
+        schema: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetConsumerSearchResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /consumer/v2/profiles/{profileId}:
+    get:
+      tags: [ConsumerProfiles]
+      summary: Retrieve a consumer's profile and receivers
+      description: Retrieves a consumer profile and, optionally, its receivers.
+      operationId: getConsumerProfileInfo
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - in: path
+        name: profileId
+        required: true
+        schema: {type: string}
+      - in: query
+        name: returnReceivers
+        schema:
+          type: boolean
+          enum: [true, false]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetProfileResponseDetails'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+    put:
+      tags: [ConsumerProfiles]
+      summary: Update a Consumer Profile
+      description: Updates a consumer profile.
+      operationId: putUpdateConsumerProfile
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - in: path
+        name: profileId
+        required: true
+        schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateConsumerProfileRequest'}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UpdateConsumerProfileResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /business/v1/profiles:
+    post:
+      tags: [BusinessProfiles]
+      summary: Create a Business Profile
+      description: Creates a business profile.
+      operationId: postCreateBusinessProfile
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateBusinessProfileRequest'}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreateBusinessProfileResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+    get:
+      tags: [BusinessProfiles]
+      summary: Retreive a list of business profiles for an agentPartnerId
+      description: Lists the business profiles of an agent partner.
+      operationId: getListOfBusinessProfiles
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - in: query
+        name: pageNumber
+        schema: {type: integer, minimum: 0}
+      - in: query
+        name: perPage
+        schema: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetBusinessProfileList'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+  /business/v1/profiles/{businessProfileId}:
+    get:
+      tags: [BusinessProfiles]
+      summary: Retrieve a business profile
+      description: Retrieves a business profile.
+      operationId: getBusinessProfile
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/BusinessProfileId'}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GetBusinessProfileResponse'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+    put:
+      tags: [BusinessProfiles]
+      summary: Update a business profile
+      description: Updates a business profile.
+      operationId: putUpdateBusinessProfile
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - {$ref: '#/components/parameters/BusinessProfileId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateRequest'}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UpdateResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+    delete:
+      tags: [BusinessProfiles]
+      summary: Delete a business profile
+      description: Deletes a business profile.
+      operationId: deleteBusinessProfile
+      security:
+      - OAuth2: [write]
+      parameters:
+      - {$ref: '#/components/parameters/ClientRequestIdOptional'}
+      - {$ref: '#/components/parameters/ConsumerIPAddress'}
+      - {$ref: '#/components/parameters/TargetAudience'}
+      - {$ref: '#/components/parameters/UserLanguage'}
+      - {$ref: '#/components/parameters/AgentPartnerId'}
+      - {$ref: '#/components/parameters/BusinessProfileId'}
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeleteResponse'}
+        '204': {$ref: '#/components/responses/NoContentError'}
+        '400': {$ref: '#/components/responses/BadRequestError'}
+        '401': {$ref: '#/components/responses/UnauthorizedError'}
+        '403': {$ref: '#/components/responses/ForbiddenError'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+components:
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: 'Client-credentials flow. Obtain the token with GET /oauth/accesstoken?grant_type=client_credentials using HTTP Basic credentials.'
+      flows: {clientCredentials: {tokenUrl: 'https://sandboxapi.moneygram.com/oauth/accesstoken', scopes: {read: Grants read access, write: Grants write access}}}
+    BasicAuth: {type: http, scheme: basic, description: 'Client id as username and client secret as password; used only for the token endpoint.'}
+  parameters:
+    ClientRequestIdRequired: {in: header, name: X-MG-ClientRequestId, schema: {type: string}, required: true}
+    ConsumerIPAddress: {in: header, name: X-MG-ConsumerIPAddress, schema: {type: string}}
+    ClientRequestIdOptional: {in: header, name: X-MG-ClientRequestId, schema: {type: string}}
+    ReferenceNumber: {in: query, name: referenceNumber, required: true, schema: {type: string}}
+    TargetAudience: {in: query, name: targetAudience, schema: {type: string}}
+    AgentPartnerId: {in: query, name: agentPartnerId, schema: {type: string}, required: true}
+    UserLanguage: {in: query, name: userLanguage, required: true, schema: {type: string}}
+    TransactionId: {in: path, name: transactionId, schema: {type: string}, required: true}
+    PosId: {in: query, name: posId, schema: {type: string}}
+    OperatorId: {in: query, name: operatorId, schema: {type: string}}
+    RefundReasonCode:
+      in: query
+      name: refundReasonCode
+      required: true
+      schema: {type: string, enum: [NO_RCV_LOC, WRONG_SERVICE, NO_TQ, INCORRECT_AMT, MS_NOT_USED, TECH_PROB, CHANGE_MIND, DUP_TRAN, NO_PICKUP, PROB_AT_LOC, STATE_CNTRY_REST, SB_EP, WRONG_CNTRY, WRONG_CRNCY, WRONG_STATE]}
+    MGSessionId: {in: header, name: X-MG-SessionId, schema: {type: string}}
+    Address: {in: query, name: address, required: true, schema: {type: string}}
+    Country: {in: query, name: country, required: true, schema: {type: string, minLength: 2, maxLength: 2}}
+    SearchRadius: {in: query, name: searchRadius, required: true, schema: {type: number, minimum: 0}}
+    Limit: {in: query, name: limit, schema: {type: number, minimum: 0}}
+    TransactionAmount: {in: query, name: transactionAmount, schema: {type: number, minimum: 0}}
+    DestinationCountryCode: {in: query, name: destinationCountryCode, schema: {type: string}, required: true}
+    OriginatingCountryCode: {in: query, name: originatingCountryCode, required: true, schema: {type: string}}
+    SendCurrencyCode: {in: query, name: sendCurrencyCode, required: true, schema: {type: string}}
+    ReceiverCurrencyCode: {in: query, name: receiveCurrencyCode, schema: {type: string}}
+    ServiceOptionCode: {in: query, name: serviceOptionCode, schema: {type: string}}
+    DestinationCountrySubdivisionCode: {in: query, name: destinationCountrySubdivisionCode, schema: {type: string}}
+    ServiceOptionRoutingCode: {in: query, name: serviceOptionRoutingCode, schema: {type: string}}
+    TransactionIdQuery: {in: query, name: transactionId, schema: {type: string}}
+    CountryCode: {in: query, name: countryCode, schema: {type: string}, required: true}
+    LanguageLocalId: {in: path, name: languageLocalId, required: true, schema: {type: string}}
+    BusinessProfileId: {in: path, name: businessProfileId, schema: {type: string}, required: true}
+  responses:
+    BadRequestError:
+      description: Bad request
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorsResponse'}}}
+    ForbiddenError:
+      description: Forbidden
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorsResponse'}}}
+    UnauthorizedError:
+      description: Unauthorized
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorsResponse'}}}
+    InternalServerError:
+      description: Internal server error
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorsResponse'}}}
+    BadRequestErrorStatus:
+      description: Bad request
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorResponse'}}}
+    ForbiddenErrorStatus:
+      description: Forbidden
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorResponse'}}}
+    UnauthorizedErrorStatus:
+      description: Unauthorized
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorResponse'}}}
+    InternalServerErrorStatus:
+      description: Internal server error
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/errorResponse'}}}
+    NoContentError:
+      description: No content found for the request
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/NoContentErrorDetails'}}}
+    BadRequestErrorAccessToken:
+      description: Bad request
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorDetailsAccessToken'}}}
+    ForbiddenErrorAccessToken:
+      description: Forbidden
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorDetailsAccessToken'}}}
+    UnauthorizedErrorAccessToken:
+      description: Unauthorized
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorDetailsAccessToken'}}}
+    InternalServerErrorAccessToken:
+      description: Internal server error
+      headers: {X-MG-SessionId: {required: false, schema: {type: string}}, X-MG-ClientRequestId: {required: false, schema: {type: string}}, X-MG-RequestId: {required: false, schema: {type: string}}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorDetailsAccessToken'}}}
+  schemas:
+    Amount: {type: object, properties: {value: {type: number}, currencyCode: {type: string}}}
+    BusinessDetails: {type: object, properties: {targetAudience: {type: string, enum: [AGENT_FACING, CUSTOMER_FACING]}, agentPartnerId: {type: string}, posId: {type: string}, operatorId: {type: string}, userLanguage: {type: string}}}
+    CustomFields: {minItems: 0, type: array, items: {type: object, properties: {key: {type: string}, value: {type: string}}}}
+    ErrorDetails:
+      type: object
+      required: [category, message]
+      properties: {category: {type: string}, code: {type: string}, message: {type: string}, offendingFields: {minItems: 0, type: array, items: {type: object, properties: {field: {type: string}}}}}
+    FundInStoreDetails: {type: object, properties: {fundInStore: {type: boolean}, fundInStoreAgentPartnerId: {type: string}}}
+    errorsResponse: {type: object, properties: {errors: {type: array, items: {$ref: '#/components/schemas/ErrorDetails'}}}}
+    additionalChargesDetails: {type: object, properties: {typeCode: {type: string}, label: {type: string}, value: {type: number}, currencyCode: {type: string}}}
+    SendAmountDetails:
+      type: object
+      required: [amount, fees, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        additionalCharges: {type: array, items: {$ref: '#/components/schemas/additionalChargesDetails'}}
+        discountsApplied: {type: object, properties: {totalDiscount: {$ref: '#/components/schemas/Amount'}, promotionDetails: {type: array, items: {$ref: '#/components/schemas/PromotionDetail'}}}}
+        total: {$ref: '#/components/schemas/Amount'}
+    ReceiveAmountDetails:
+      type: object
+      required: [amount, fxRate, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        additionalCharges: {type: array, items: {$ref: '#/components/schemas/additionalChargesDetails'}}
+        total: {$ref: '#/components/schemas/Amount'}
+        fxRate: {type: number}
+        fxRateEstimated: {type: boolean}
+    PromotionDetail: {type: object, properties: {code: {type: string}, discount: {$ref: '#/components/schemas/Amount'}, errorCode: {type: string}, errorMessage: {type: string}}}
+    TransactionQuoteDetails:
+      type: object
+      properties:
+        transactionId: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        estimatedDelivery: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetails'}
+        receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetails'}
+    quoteBySendAmountRequest:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetails'}
+        - type: object
+          required: [destinationCountryCode, sendAmount]
+          properties:
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            sendAmountIncludingFee: {type: boolean}
+            sendAmount: {type: object, required: [value], properties: {value: {type: number}, currencyCode: {type: string}}}
+            receiveCurrencyCode: {type: string}
+            receiverSameAsSender: {type: boolean}
+            promotionCodes: {type: array, items: {type: string}}
+            rewardsNumber: {type: string, minLength: 0, maxLength: 20, pattern: '^[0-9]*$'}
+            fundInStore: {$ref: '#/components/schemas/FundInStoreDetails'}
+        - {type: object, properties: {additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    quoteByReceiveAmountRequest:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetails'}
+        - type: object
+          required: [destinationCountryCode, receiveAmount]
+          properties:
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            receiveAmount: {type: object, required: [value], properties: {value: {type: number}, currencyCode: {type: string}}}
+            sendCurrencyCode: {type: string}
+            receiverSameAsSender: {type: boolean}
+            promotionCodes: {type: array, items: {type: string}}
+            rewardsNumber: {type: string, minLength: 0, maxLength: 20, pattern: '^[0-9]*$'}
+            fundInStore: {$ref: '#/components/schemas/FundInStoreDetails'}
+        - {type: object, properties: {additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    quoteResponse: {type: object, properties: {transactions: {type: array, items: {$ref: '#/components/schemas/TransactionQuoteDetails'}}}}
+    Name:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        middleName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        lastName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        secondLastName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+    ReceiverName:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        middleName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        lastName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        secondLastName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+    PersonalDetails:
+      type: object
+      required: [dateOfBirth]
+      properties:
+        genderCode: {type: string, minLength: 0, maxLength: 30}
+        dateOfBirth: {type: string, minLength: 0, maxLength: 10, format: date}
+        birthCity: {type: string, minLength: 0, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        birthCountryCode: {type: string, minLength: 3, maxLength: 3}
+        citizenshipCountryCode: {type: string, minLength: 3, maxLength: 3}
+        occupationCode:
+          type: string
+          enum:
+            - ADMIN
+            - AGRICULTURE
+            - AUTOMOTIVE_SALES
+            - BANKING
+            - CLERGY
+            - COMPUTER
+            - CONSULTING
+            - CUSTOMER_CARE
+            - EDUCATION
+            - ENGINEER
+            - ENTERTAINMENT
+            - ENTREPRENEUR
+            - EXECUTIVE
+            - EXPLICIT_SERVICES
+            - FACTORY
+            - HEALTH_SERVICES
+            - HUMAN_RESOURCES
+            - LEGAL
+            - PERSONAL_SERVICES
+            - PUBLIC_OFFICIAL
+            - RESTAURANT
+            - RETIRED
+            - SPORT
+            - STUDENT
+            - UNEMPLOYED
+        politicalExposedPerson: {type: boolean}
+        nationalityCountryCode: {type: string, minLength: 3, maxLength: 3}
+    Address:
+      type: object
+      required: [line1, city, countryCode]
+      properties:
+        line1: {type: string, minLength: 5, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line2: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line3: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        city: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        countrySubdivisionCode: {type: string}
+        countryCode: {type: string, minLength: 3, maxLength: 3}
+        postalCode: {type: string, minLength: 2, maxLength: 10, pattern: '^([0-9a-zA-Z -])*$'}
+    ReceiverAddress:
+      type: object
+      required: [line1, city, countryCode]
+      properties:
+        line1: {type: string, minLength: 5, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line2: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line3: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        city: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        countrySubdivisionCode: {type: string}
+        countryCode: {type: string, minLength: 3, maxLength: 3}
+        postalCode: {type: string, minLength: 2, maxLength: 10, pattern: '^([0-9a-zA-Z -])*$'}
+    AdditionalAddressDetails: {allOf: [{type: object, properties: {type: {type: string, enum: [Second residential address, Mailing address, Business address, Billing address, Shipping address, PO Box]}}}, {$ref: '#/components/schemas/Address'}]}
+    Phone: {type: object, properties: {number: {type: string, minLength: 5, maxLength: 14, pattern: '^([0-9\\.\\-])*$'}, countryDialCode: {type: string, minLength: 0, maxLength: 5}}}
+    PrimaryIdentification:
+      type: object
+      required: [typeCode, id, issueCountryCode]
+      properties:
+        typeCode: {type: string}
+        id: {type: string, minLength: 0, maxLength: 30}
+        issueCountrySubdivisionCode: {type: string}
+        issueCountryCode: {type: string, minLength: 3, maxLength: 3}
+        expirationYear: {type: string, minLength: 0, maxLength: 4}
+        expirationMonth: {type: string}
+        expirationDay: {type: string}
+        issueAuthority: {type: string, minLength: 0, maxLength: 30}
+        issueCity: {type: string, minLength: 0, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        issueYear: {type: string, minLength: 0, maxLength: 4}
+        issueMonth: {type: string}
+        issueDay: {type: string}
+    SecondaryIdentification:
+      type: object
+      properties:
+        typeCode: {type: string}
+        id: {type: string, minLength: 0, maxLength: 30}
+        issueCountrySubdivisionCode: {type: string}
+        issueCountryCode: {type: string, minLength: 3, maxLength: 3}
+        expirationYear: {type: string, minLength: 0, maxLength: 4}
+        expirationMonth: {type: string}
+        expirationDay: {type: string}
+        issueAuthority: {type: string, minLength: 0, maxLength: 30}
+        issueCity: {type: string, minLength: 0, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        issueYear: {type: string, minLength: 0, maxLength: 4}
+        issueMonth: {type: string}
+        issueDay: {type: string}
+    FamilyDetails:
+      type: object
+      properties:
+        type: {type: string, enum: [FATHER_S_NAME, MOTHER_S_NAME, SIBLING_S_NAME, NAME_AT_BIRTH, MOTHERS_MAIDEN_NAME, GRANDFATHER_S_NAME]}
+        firstName: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        middleName: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        lastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        secondLastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+    ReceiptDetails: {type: object, properties: {primaryLanguage: {type: string}, secondaryLanguage: {type: string}, image: {type: string}}}
+    NotificationPreferenceDetails: {allOf: [{type: object, properties: {type: {type: string, enum: [Transactional, Marketing, Loyalty Program]}, channel: {type: string, enum: [SMS, EMAIL, BOTH, NONE]}, optIn: {type: boolean}}}]}
+    FundingDetails:
+      type: object
+      properties:
+        tenderType: {type: string, minLength: 0, maxLength: 30, enum: [CASH, CREDIT, DEBIT, TRAVELER'S CHECK, CRYPTO, STABLE COIN]}
+        provider: {type: string}
+        providerNetworkCode: {type: string}
+        providerAccountNumber: {type: string}
+        accountIdentifier: {type: string}
+    TransactionDetails:
+      type: object
+      properties:
+        purposeOfTransactionCode: {type: string, minLength: 0, maxLength: 30, enum: [BUSINESS_EXPENSE, DONATION, EDUCATION_TRAIN, GIFT, INVEST_SAVING, LEGAL_OBLIGATION, LOAN, TRAVEL_EXPENSES, BILLS, FOOD, MEDICAL, PURCHASE_GOODS, PERSONAL_USE, SALARY]}
+        sourceOfFundsCode: {type: string, minLength: 0, maxLength: 30, enum: [LOAN, SAVINGS, SALE_OF_PROPERTY, SALARY_EMPLOY, FAMILY_FUNDS, INHERITANCE, LOTTERY_GAMBLING, PENSION, SOCIAL_BENEFITS, THIRD_PARTY]}
+        proofOfFundsCode: {type: string, minLength: 0, maxLength: 30, enum: [ACT_OF_ATTORNEY, BANK_STATEMENT, NATIONAL_LOTTERY, PAYROLL_SLIP, SALE_CERTIFICATE, TAX_NOTICE]}
+        intendedUseOfMGIServicesCode: {type: string, minLength: 0, maxLength: 30, enum: [BUSINESS_RELATED, CHARITY_SUPPORT, FAMILY_FRIENDS_SUPPORT, THIRD_PARTY]}
+        relationshipToReceiver: {type: string, minLength: 0, maxLength: 30, enum: [ACQUAINTANCE, BUSINESS_PARTNER, CLIENT, EMPLOY_EMPLOYER, FAMILY, FRIEND, CONTRACTOR, EMPLOYER, MYSELF, ONLINE_FRIEND, THIRD_PARTY, VENDOR]}
+    transactBySendAmountRequest:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetails'}
+        - type: object
+          required: [destinationCountryCode, sendAmount, receiveCurrencyCode]
+          properties:
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            sendAmount: {$ref: '#/components/schemas/Amount'}
+            receiveCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            rewardsNumber: {type: string, minLength: 0, maxLength: 20, pattern: '^[0-9]*$'}
+            placeOnPartnerHold: {type: boolean}
+            fundInStore: {$ref: '#/components/schemas/FundInStoreDetails'}
+            fundingSource: {$ref: '#/components/schemas/FundingDetails'}
+            targetAccountProfileId: {type: string}
+            targetAccount: {$ref: '#/components/schemas/CustomFields'}
+        - type: object
+          properties:
+            sender:
+              type: object
+              required: [name, address, mobilePhone, primaryIdentification]
+              properties:
+                name: {$ref: '#/components/schemas/Name'}
+                address: {$ref: '#/components/schemas/Address'}
+                mobilePhone: {$ref: '#/components/schemas/Phone'}
+                email: {type: string, format: email, minLength: 0, maxLength: 255}
+                enrolInRewards: {type: boolean}
+                notificationPreferences: {type: array, items: {$ref: '#/components/schemas/NotificationPreferenceDetails'}}
+                notificationLanguagePreference: {type: string}
+                personalDetails: {$ref: '#/components/schemas/PersonalDetails'}
+                primaryIdentification: {$ref: '#/components/schemas/PrimaryIdentification'}
+                secondaryIdentification: {$ref: '#/components/schemas/SecondaryIdentification'}
+                additionalAddress: {type: array, items: {$ref: '#/components/schemas/AdditionalAddressDetails'}}
+                additionalFamilyNames: {type: array, items: {$ref: '#/components/schemas/FamilyDetails'}}
+                profileId: {type: string}
+                additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+            receiver: {type: object, properties: {name: {$ref: '#/components/schemas/ReceiverName'}, address: {$ref: '#/components/schemas/ReceiverAddress'}, mobilePhone: {$ref: '#/components/schemas/Phone'}}}
+            receiverSameAsSender: {type: boolean}
+            transactionInformation: {$ref: '#/components/schemas/TransactionDetails'}
+            receipt: {$ref: '#/components/schemas/ReceiptDetails'}
+            partnerTransactionId: {type: string}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactByReceiveAmountRequest:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetails'}
+        - type: object
+          required: [destinationCountryCode, receiveAmount, sendCurrencyCode]
+          properties:
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            receiveAmount: {$ref: '#/components/schemas/Amount'}
+            sendCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            rewardsNumber: {type: string, minLength: 0, maxLength: 20, pattern: '^[0-9]*$'}
+            fundInStore: {$ref: '#/components/schemas/FundInStoreDetails'}
+            fundingSource: {$ref: '#/components/schemas/FundingDetails'}
+            targetAccountProfileId: {type: string}
+            targetAccount: {$ref: '#/components/schemas/CustomFields'}
+        - type: object
+          properties:
+            sendCurrencyCode: {type: string}
+            sender:
+              type: object
+              required: [name, address, mobilePhone, primaryIdentification]
+              properties:
+                name: {$ref: '#/components/schemas/Name'}
+                address: {$ref: '#/components/schemas/Address'}
+                mobilePhone: {$ref: '#/components/schemas/Phone'}
+                email: {type: string, format: email, minLength: 0, maxLength: 255}
+                enrolInRewards: {type: boolean}
+                notificationPreferences: {type: array, items: {$ref: '#/components/schemas/NotificationPreferenceDetails'}}
+                notificationLanguagePreference: {type: string}
+                personalDetails: {$ref: '#/components/schemas/PersonalDetails'}
+                primaryIdentification: {$ref: '#/components/schemas/PrimaryIdentification'}
+                secondaryIdentification: {$ref: '#/components/schemas/SecondaryIdentification'}
+                additionalAddress: {type: array, items: {$ref: '#/components/schemas/AdditionalAddressDetails'}}
+                additionalFamilyNames: {type: array, items: {$ref: '#/components/schemas/FamilyDetails'}}
+                profileId: {type: string}
+                additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+            receiver: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}, address: {$ref: '#/components/schemas/Address'}, mobilePhone: {$ref: '#/components/schemas/Phone'}}}
+            receiverSameAsSender: {type: boolean}
+            transactionInformation: {$ref: '#/components/schemas/TransactionDetails'}
+            receipt: {$ref: '#/components/schemas/ReceiptDetails'}
+            partnerTransactionId: {type: string}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactResponse:
+      allOf:
+        - {type: object, properties: {readyForCommit: {type: boolean}, rewardsNumber: {type: string}}}
+        - type: object
+          properties:
+            transactionId: {type: string}
+            serviceOptionName: {type: string}
+            serviceOptionRoutingName: {type: string}
+            sendAmount: {$ref: '#/components/schemas/SendAmountDetails'}
+            receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetails'}
+            targetAccountProfileId: {type: string}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    SettlementDetails: {type: object, properties: {reconcileSendAmount: {$ref: '#/components/schemas/Amount'}, reconcileReceiveAmount: {$ref: '#/components/schemas/Amount'}, settlementAccount: {type: string}, settlementMemo: {type: string}}}
+    commitRequest:
+      type: object
+      properties: {fundingSource: {$ref: '#/components/schemas/FundingDetails'}, partnerTransactionId: {type: string}, partnerSettlementId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}
+    commitResponse: {type: object, properties: {referenceNumber: {type: string}, fundsInStoreConfirmationCode: {type: string}, expectedPayoutDate: {type: string, format: date}, settlement: {$ref: '#/components/schemas/SettlementDetails'}}}
+    PromotionDetailStatus: {type: object, properties: {code: {type: string}, discount: {$ref: '#/components/schemas/Amount'}, errorCode: {type: string}, errorMessage: {type: string}}}
+    SendAmountDetailsStatus:
+      type: object
+      required: [amount, fees, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        discountsApplied: {type: object, properties: {totalDiscount: {$ref: '#/components/schemas/Amount'}, promotionDetails: {type: array, items: {$ref: '#/components/schemas/PromotionDetailStatus'}}}}
+        total: {$ref: '#/components/schemas/Amount'}
+    ReceiveAmountDetailsStatus:
+      type: object
+      required: [amount, fxRate, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        total: {$ref: '#/components/schemas/Amount'}
+        fxRate: {type: number}
+        fxRateEstimated: {type: boolean}
+    transactionSubStatusDetails:
+      properties:
+        subStatus: {type: string}
+        message: {type: string}
+        targetCustomer: {type: string}
+        dataToCollect: {minItems: 0, type: array, items: {type: object, properties: {Code: {type: string}, dataCollection: {type: string}}}}
+    errorResponse: {type: object, properties: {error: {$ref: '#/components/schemas/ErrorDetails'}}}
+    GetTransactionResponse:
+      type: object
+      required: [originatingCountryCode, destinationCountryCode]
+      properties:
+        transactionId: {type: string}
+        referenceNumber: {type: string}
+        transactionSendDateTime: {type: string, format: date-time}
+        expectedPayoutDate: {type: string, format: date}
+        transactionStatus: {type: string}
+        transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}
+        originatingCountryCode: {type: string}
+        destinationCountryCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsStatus'}
+        receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsStatus'}
+        sender: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}, profileId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+        receiver: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}
+        additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    RefundAmountDetails:
+      type: object
+      required: [amount, fees, total]
+      properties: {amount: {$ref: '#/components/schemas/Amount'}, fees: {$ref: '#/components/schemas/Amount'}, taxes: {$ref: '#/components/schemas/Amount'}, total: {$ref: '#/components/schemas/Amount'}}
+    GetTransactionResponseRefund:
+      type: object
+      properties:
+        transactionId: {type: string}
+        refundId: {type: string}
+        transactionStatus: {type: string}
+        transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}
+        availableForRefund: {type: boolean}
+        originatingCountryCode: {type: string}
+        destinationCountryCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsStatus'}
+        refundAmount: {$ref: '#/components/schemas/RefundAmountDetails'}
+        sender: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}, profileId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+        receiver: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}
+        additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    BusinessDetailsRefund: {type: object, properties: {targetAudience: {type: string}, agentPartnerId: {type: string}, posId: {type: string}, operatorId: {type: string}, userLanguage: {type: string}}}
+    SettlementDetailsRefund: {type: object, properties: {reconcileSendAmount: {$ref: '#/components/schemas/Amount'}, reconcileReceiveAmount: {$ref: '#/components/schemas/Amount'}, walletAddress: {type: string}, walletMemo: {type: string}}}
+    commitRequestRefund:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsRefund'}
+        - {type: object, properties: {refundId: {type: string}, refundTargetAccount: {$ref: '#/components/schemas/FundingDetails'}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    commitResponseRefund: {allOf: [{type: object, properties: {referenceNumber: {type: string}, expectedPayoutDate: {type: string, format: date-time}, settlement: {$ref: '#/components/schemas/SettlementDetailsRefund'}}}]}
+    GetTransactionResponseAmend:
+      type: object
+      properties:
+        transactionId: {type: string}
+        amendId: {type: string}
+        transactionStatus: {type: string}
+        transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}
+        availableForAmend: {type: boolean}
+        originatingCountryCode: {type: string}
+        destinationCountryCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsStatus'}
+        receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsStatus'}
+        sender: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}, profileId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+        receiver: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}
+        additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    amendNameRequest: {type: object, properties: {amendId: {type: string}, receiver: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}}}
+    amendTransactionResponse:
+      type: object
+      properties: {amendSuccess: {type: boolean}, transactionStatus: {type: string}, transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}, receipt: {$ref: '#/components/schemas/ReceiptDetails'}}
+    PersonalDetailsAmend:
+      type: object
+      required: [dateOfBirth, birthCountryCode]
+      properties:
+        genderCode: {type: string, minLength: 0, maxLength: 30}
+        dateOfBirth: {type: string, minLength: 0, maxLength: 10, format: date}
+        birthCity: {type: string, minLength: 0, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        birthCountryCode: {type: string, minLength: 3, maxLength: 3}
+        citizenshipCountryCode: {type: string, minLength: 3, maxLength: 3}
+        occupationCode:
+          type: string
+          enum:
+            - ADMIN
+            - AGRICULTURE
+            - AUTOMOTIVE_SALES
+            - BANKING
+            - CLERGY
+            - COMPUTER
+            - CONSULTING
+            - CUSTOMER_CARE
+            - EDUCATION
+            - ENGINEER
+            - ENTERTAINMENT
+            - ENTREPRENEUR
+            - EXECUTIVE
+            - EXPLICIT_SERVICES
+            - FACTORY
+            - HEALTH_SERVICES
+            - HUMAN_RESOURCES
+            - LEGAL
+            - PERSONAL_SERVICES
+            - PUBLIC_OFFICIAL
+            - RESTAURANT
+            - RETIRED
+            - SPORT
+            - STUDENT
+            - UNEMPLOYED
+        politicalExposedPerson: {type: boolean}
+        nationalityCountryCode: {type: string, minLength: 3, maxLength: 3}
+    FamilyInfo:
+      type: object
+      properties:
+        type: {type: string, enum: [FATHER_S_NAME, MOTHER_S_NAME, SIBLING_S_NAME, NAME_AT_BIRTH, MOTHER_S_MAIDEN_NAME, GRANDFATHER_S_NAME]}
+        firstName: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        middleName: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        lastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        secondLastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+    amendReceiverRequest:
+      type: object
+      properties:
+        amendId: {type: string}
+        receiver:
+          type: object
+          properties:
+            mobilePhone: {$ref: '#/components/schemas/Phone'}
+            personalDetails: {$ref: '#/components/schemas/PersonalDetailsAmend'}
+            familyDetails: {type: array, items: {$ref: '#/components/schemas/FamilyInfo'}}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactionSubStatusDetailsPayout:
+      properties:
+        subStatus: {type: string}
+        targetCustomer: {type: string}
+        customerAction: {type: string}
+        dataToCollect: {minItems: 0, type: array, items: {type: object, properties: {Code: {type: string}, dataCollection: {type: string}}}}
+    GetTransactionResponsePayout:
+      type: object
+      properties:
+        transactionId: {type: string}
+        payoutId: {type: string}
+        availableForPayout: {type: boolean}
+        transactionStatus: {type: string}
+        transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetailsPayout'}}
+        originatingCountryCode: {type: string}
+        destinationCountryCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsStatus'}
+        receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsStatus'}
+        originalReceiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsStatus'}
+        estimatedReceiveAmountInLocalCurrency:
+          type: object
+          required: [fxRate, total]
+          properties:
+            amount: {$ref: '#/components/schemas/Amount'}
+            fees: {$ref: '#/components/schemas/Amount'}
+            taxes: {$ref: '#/components/schemas/Amount'}
+            total: {$ref: '#/components/schemas/Amount'}
+            fxRate: {type: number}
+            fxRateEstimated: {type: boolean}
+        sender: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}
+        receiver: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}
+        additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    PersonalDetailsPayout:
+      type: object
+      required: [dateOfBirth]
+      properties:
+        genderCode: {type: string, minLength: 0, maxLength: 30}
+        dateOfBirth: {type: string, minLength: 0, maxLength: 10, format: date}
+        birthCity: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        birthCountryCode: {type: string, minLength: 3, maxLength: 3}
+        citizenshipCountryCode: {type: string, minLength: 3, maxLength: 3}
+        occupationCode:
+          type: string
+          enum:
+            - ADMIN
+            - AGRICULTURE
+            - AUTOMOTIVE_SALES
+            - BANKING
+            - CLERGY
+            - COMPUTER
+            - CONSULTING
+            - CUSTOMER_CARE
+            - EDUCATION
+            - ENGINEER
+            - ENTERTAINMENT
+            - ENTREPRENEUR
+            - EXECUTIVE
+            - EXPLICIT_SERVICES
+            - FACTORY
+            - HEALTH_SERVICES
+            - HUMAN_RESOURCES
+            - LEGAL
+            - PERSONAL_SERVICES
+            - PUBLIC_OFFICIAL
+            - RESTAURANT
+            - RETIRED
+            - SPORT
+            - STUDENT
+            - UNEMPLOYED
+        politicalExposedPerson: {type: boolean}
+        nationalityCountryCode: {type: string, minLength: 3, maxLength: 3}
+    PhonePayout: {type: object, required: [number, countryDialCode], properties: {number: {type: string, minLength: 5, maxLength: 14, pattern: '^([0-9\\.\\-])*$'}, countryDialCode: {type: string, minLength: 0, maxLength: 5}}}
+    PrimaryIdentificationPayout:
+      type: object
+      required: [typeCode, id, issueCountryCode]
+      properties:
+        typeCode: {type: string}
+        id: {type: string, minLength: 0, maxLength: 30}
+        issueCountrySubdivisionCode: {type: string}
+        issueCountryCode: {type: string, minLength: 3, maxLength: 3}
+        expirationYear: {type: string, minLength: 0, maxLength: 4}
+        expirationMonth: {type: string}
+        expirationDay: {type: string}
+        issueAuthority: {type: string, minLength: 0, maxLength: 30}
+        issueCity: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        issueYear: {type: string, minLength: 0, maxLength: 4}
+        issueMonth: {type: string}
+        issueDay: {type: string}
+    SecondaryIdentificationPayout:
+      type: object
+      properties:
+        typeCode: {type: string}
+        id: {type: string, minLength: 0, maxLength: 30}
+        issueCountrySubdivisionCode: {type: string}
+        issueCountryCode: {type: string, minLength: 3, maxLength: 3}
+        expirationYear: {type: string, minLength: 0, maxLength: 4}
+        expirationMonth: {type: string}
+        expirationDay: {type: string}
+        issueAuthority: {type: string, minLength: 0, maxLength: 30}
+        issueCity: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        issueYear: {type: string, minLength: 0, maxLength: 4}
+        issueMonth: {type: string}
+        issueDay: {type: string}
+    FamilyDetailsPayout:
+      type: object
+      properties:
+        type: {type: string, enum: [FATHER_S_NAME, MOTHER_S_NAME, SIBLING_S_NAME, NAME_AT_BIRTH, MOTHER_S_MAIDEN_NAME, GRANDFATHER_S_NAME]}
+        firstName: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        middleName: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        lastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        secondLastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+    CustomFieldsReceiver: {minItems: 0, type: array, items: {type: object, properties: {key: {type: string}, value: {type: string}}}}
+    PayoutRequest:
+      type: object
+      required: [receiver]
+      properties:
+        payoutId: {type: string}
+        receiver:
+          type: object
+          required: [address, mobilePhone, primaryIdentification]
+          properties:
+            address: {$ref: '#/components/schemas/Address'}
+            mobilePhone: {$ref: '#/components/schemas/PhonePayout'}
+            email: {type: string, format: email, minLength: 0, maxLength: 255}
+            notificationPreferences: {type: array, items: {$ref: '#/components/schemas/NotificationPreferenceDetails'}}
+            notificationLanguagePreference: {type: string}
+            personalDetails: {$ref: '#/components/schemas/PersonalDetailsPayout'}
+            primaryIdentification: {$ref: '#/components/schemas/PrimaryIdentificationPayout'}
+            secondaryIdentification: {$ref: '#/components/schemas/SecondaryIdentificationPayout'}
+            additionalAddress: {type: array, items: {$ref: '#/components/schemas/AdditionalAddressDetails'}}
+            additionalFamilyNames: {type: array, items: {$ref: '#/components/schemas/FamilyDetailsPayout'}}
+            profileId: {type: string}
+            additionalDetails: {$ref: '#/components/schemas/CustomFieldsReceiver'}
+        relationshipToSender: {type: string, enum: [ACQUAINTANCE, BUSINESS_PARTNER, CLIENT, EMPLOY_EMPLOYER, FAMILY, FRIEND, CONTRACTOR, EMPLOYER, MYSELF, ONLINE_FRIEND, THIRD_PARTY, VENDOR]}
+        receivePurposeOfTransaction: {type: string, enum: [BUSINESS_EXPENSE, DONATION, EDUCATION_TRAIN, GIFT, INVEST_SAVING, LEGAL_OBLIGATION, LOAN, TRAVEL_EXPENSES, BILLS, FOOD, MEDICAL, PURCHASE_GOODS, PERSONAL_USE, SALARY]}
+        intendedUseOfMGIServices: {type: string, enum: [BUSINESS_RELATED, CHARITY_SUPPORT, FAMILY_FRIENDS_SUPPORT, THIRD_PARTY]}
+    PayoutResponse: {type: object, required: [readyForCommit, transactionId], properties: {readyForCommit: {type: boolean}, transactionId: {type: string}}}
+    transactionDetails:
+      type: object
+      properties: {purposeOfTransactionCode: {type: string}, sourceOfFundsCode: {type: string}, proofOfFundsCode: {type: string}, intendedUseOfMGIServicesCode: {type: string}, relationshipToReceiver: {type: string}}
+    GetComplianceResponse:
+      type: object
+      required: [transactionId]
+      properties:
+        transactionId: {type: string}
+        payoutId: {type: string}
+        originatingCountryCode: {type: string}
+        destinationCountryCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsStatus'}
+        receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsStatus'}
+        sender:
+          type: object
+          properties:
+            name: {$ref: '#/components/schemas/Name'}
+            address: {$ref: '#/components/schemas/Address'}
+            mobilePhone: {$ref: '#/components/schemas/PhonePayout'}
+            email: {type: string, format: email}
+            personalDetails: {$ref: '#/components/schemas/PersonalDetailsPayout'}
+            primaryIdentification: {$ref: '#/components/schemas/PrimaryIdentificationPayout'}
+            secondaryIdentification: {$ref: '#/components/schemas/SecondaryIdentificationPayout'}
+            additionalAddress: {type: array, items: {$ref: '#/components/schemas/AdditionalAddressDetails'}}
+            additionalFamilyNames: {type: array, items: {$ref: '#/components/schemas/FamilyDetailsPayout'}}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+        transactionalInformation: {type: object, properties: {additionalTransactionDetails: {$ref: '#/components/schemas/transactionDetails'}}}
+    commitPayoutRequest: {type: object, properties: {partnerTransactionId: {type: string}, payoutId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    commitPayoutResponse: {type: object, properties: {referenceNumber: {type: string}}}
+    reversalRequest:
+      type: object
+      required: [referenceNumber, receiveReversalReasonCode]
+      properties: {referenceNumber: {type: string}, retryIndicator: {type: boolean}, receiveReversalReasonCode: {type: string, enum: [WANTS_CASH, WRONG_TX, OUT_OF_CHECKS, ID_PROBLEM]}}
+    reversalResponse: {type: object, properties: {receiveReversalSuccess: {type: boolean}}}
+    BusinessDetailsDisbursement: {type: object, properties: {targetAudience: {type: string, enum: [AGENT_FACING, CUSTOMER_FACING]}, agentPartnerId: {type: string}, userLanguage: {type: string}}}
+    AdditionalChargesDetails: {type: object, properties: {typeCode: {type: string}, label: {type: string}, value: {type: number}, currencyCode: {type: string}}}
+    SendAmountDetailsDisbursement:
+      type: object
+      required: [amount, fees, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        additionalCharges: {$ref: '#/components/schemas/AdditionalChargesDetails'}
+        discountsApplied: {type: object, properties: {totalDiscount: {$ref: '#/components/schemas/Amount'}, promotionDetails: {type: array, items: {$ref: '#/components/schemas/PromotionDetail'}}}}
+        total: {$ref: '#/components/schemas/Amount'}
+    ReceiveAmountDetailsDisbursement:
+      type: object
+      required: [amount, fxRate, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        additionalCharges: {$ref: '#/components/schemas/AdditionalChargesDetails'}
+        total: {$ref: '#/components/schemas/Amount'}
+        fxRate: {type: number}
+        fxRateEstimated: {type: boolean}
+    TransactionQuoteDetailsDisbursement:
+      type: object
+      properties:
+        transactionId: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        estimatedDelivery: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsDisbursement'}
+        receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsDisbursement'}
+    quoteBySendAmountRequestDisbursement:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, beneficiaryTypeCode, sendAmount]
+          properties:
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            beneficiaryTypeCode: {type: string, enum: [Business, Consumer]}
+            sendAmount: {$ref: '#/components/schemas/Amount'}
+            receiveCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+        - {type: object, properties: {additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    quoteByReceiveAmountRequestDisbursement:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, beneficiaryTypeCode, receiveAmount]
+          properties:
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            beneficiaryTypeCode: {type: string, enum: [Business, Consumer]}
+            receiveAmount: {$ref: '#/components/schemas/Amount'}
+            sendCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+        - {type: object, properties: {additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    quoteResponseDisbursement: {type: object, properties: {transactions: {type: array, items: {$ref: '#/components/schemas/TransactionQuoteDetailsDisbursement'}}}}
+    BeneficiaryConsumerName:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        middleName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        lastName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+        secondLastName: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-\''\/])*$'}
+    BusinessAddress:
+      type: object
+      required: [line1, city, countryCode]
+      properties:
+        line1: {type: string, minLength: 5, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line2: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line3: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        city: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        countrySubdivisionCode: {type: string}
+        countryCode: {type: string, minLength: 3, maxLength: 3}
+        postalCode: {type: string, minLength: 2, maxLength: 10, pattern: '^([0-9a-zA-Z -])*$'}
+    SenderBusinessAddress:
+      type: object
+      required: [line1, city, countryCode]
+      properties:
+        line1: {type: string, minLength: 5, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line2: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line3: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        city: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        countrySubdivisionCode: {type: string}
+        countryCode: {type: string, minLength: 3, maxLength: 3}
+        postalCode: {type: string, minLength: 2, maxLength: 10, pattern: '^([0-9a-zA-Z -])*$'}
+    BeneficiaryConsumerAddress:
+      type: object
+      required: [line1, city, countryCode]
+      properties:
+        line1: {type: string, minLength: 5, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line2: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line3: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        city: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        countrySubdivisionCode: {type: string}
+        countryCode: {type: string, minLength: 3, maxLength: 3}
+        postalCode: {type: string, minLength: 2, maxLength: 10, pattern: '^([0-9a-zA-Z -])*$'}
+    SenderBusinessPhone: {type: object, properties: {number: {type: string, minLength: 5, maxLength: 14, pattern: '^([0-9\\.\\-])*$'}, countryDialCode: {type: string, minLength: 0, maxLength: 5}}}
+    BeneficiaryConsumerPhone: {type: object, properties: {number: {type: string, minLength: 5, maxLength: 14, pattern: '^([0-9\\.\\-])*$'}, countryDialCode: {type: string, minLength: 0, maxLength: 5}}}
+    BusinessProfileDetails:
+      type: object
+      required: [businessName, legalEntityName, businessRegistrationNumber, businessCountryOfRegistration]
+      properties:
+        partnerBusinessProfileId: {type: string}
+        businessName: {type: string, minLength: 1, maxLength: 100}
+        legalEntityName: {type: string, minLength: 1, maxLength: 100}
+        businessType:
+          type: string
+          enum:
+            - ACCOMMODATION_HOTELS
+            - ADULT_CONTENT
+            - ADVERTISING_AND_MARKETING
+            - AGRICULTURE_SEEDS_PLANTS
+            - ALCOHOL
+            - ARCHITECTURE
+            - ARTS
+            - AUDIO_AND_VIDEO
+            - AUTOMOTIVE
+            - CHARITY
+            - CHEMICALS
+            - CLOTHING
+            - CONSTRUCTION
+            - CONSULTING_OTHER
+            - CROWDFUNDING
+            - CRYPTOCURRENCY
+            - DENTAL_SERVICES
+            - DESIGN
+            - DOCTORS_AND_MEDICAL_SERVICES
+            - HOME_CARE
+            - ELECTRICAL_PRODUCTS
+            - EVENTS_AND_ENTERTAINMENT
+            - FASHION_JEWELLERY
+            - FINANCIAL_CONSULTING_ACCOUNTING_TAXATION_AUDITING
+            - FINANCIAL_SERVICES_OTHER
+            - FINE_ARTS
+            - JEWELLERY_SALES
+            - FIREARMS_WEAPONS_AND_MILITARY_GOODS_SERVICES
+            - FITNESS_SPORTS_SERVICES
+            - FOOD_MANUFACTURING_RETAIL
+            - FREELANCE_PLATFORMS
+            - FREIGHT_TRANSPORT
+            - GAMBLING_AND_ONLINE_GAMING
+            - GOVERNMENT_SERVICES
+            - HEALTH_AND_BEAUTY_PRODUCTS_AND_SERVICES
+            - HOLDING_COMPANIES
+            - HOME_ACCESSORIES_FURNITURE
+            - HUMANITARIAN_TRANSFER
+            - INSURANCE
+            - INVESTMENTS
+            - IT_CONSULTING_AND_SERVICES
+            - IT_DEVELOPMENT
+            - IT_HOSTING_SERVICES
+            - LEGAL_SERVICES
+            - MACHINERY
+            - MAINTENANCE_SERVICES
+            - MANAGEMENT_CONSULTING
+            - MANUFACTURING
+            - MEDICAL_EQUIPMENT
+            - MONEY_SERVICE_BUSINESSES
+            - NEWSPAPERS_MAGAZINES_AND_BOOKS
+            - NURSING_AND_OTHER_CARE_SERVICES
+            - ONLINE_LEARNING
+            - PASSENGER_TRANSPORT
+            - PERFORMING_ARTS
+            - PETS
+            - PHARMACEUTICALS
+            - PHARMACY
+            - PHOTOGRAPHY
+            - PRECIOUS_STONES_DIAMONDS_AND_METALS
+            - PRINT_AND_ONLINE_MEDIA
+            - PUBLIC_SERVICES
+            - REAL_ESTATE
+            - RECRUITMENT_SERVICES
+            - RESTAURANTS_AND_CATERING
+            - RETAIL_WHOLESALE
+            - RIDESHARING_TRANSPORT_SHARING_SERVICES
+            - SCHOOLS_AND_UNIVERSITIES
+            - SCIENTIFIC_AND_TECHNICAL_CONSULTING
+            - SOFTWARE_AS_A_SERVICE
+            - SPORTING_EQUIPMENT
+            - TEACHING_AND_TUTORING
+            - TELECOMMUNICATIONS_SERVICES
+            - TOUR_OPERATORS
+            - TOYS_AND_GAMES
+            - TRANSLATION_AND_LANGUAGE_SERVICES
+            - TRANSPORT
+            - TRAVEL_AGENCIES
+            - UTILITY_SERVICES
+            - VIDEO_GAMING
+            - VITAMINS_AND_DIETARY_SUPPLEMENTS
+        businessRegistrationNumber: {type: string, minLength: 1, maxLength: 20, pattern: '^[A-Za-z0-9-]{1,20}$'}
+        businessIssueDate: {type: string, format: date}
+        businessCountryOfRegistration: {type: string, minLength: 3, maxLength: 3}
+        address: {$ref: '#/components/schemas/BusinessAddress'}
+        contactDetails:
+          type: object
+          properties:
+            email: {type: string, format: email, minLength: 0, maxLength: 255, pattern: '^(([\\.a-zA-Z0-9_\\-])+@([a-zA-Z0-9_\\-])+([a-zA-Z0-9_\\-])+[\\.]{1}([a-zA-Z0-9_\\-])+[\\.]?([a-zA-Z0-9_\\-])+)*$'}
+            phone: {$ref: '#/components/schemas/SenderBusinessPhone'}
+    SenderBusinessProfileDetails:
+      type: object
+      required: [businessName, legalEntityName, businessRegistrationNumber, businessCountryOfRegistration]
+      properties:
+        partnerBusinessProfileId: {type: string}
+        businessName: {type: string, minLength: 1, maxLength: 100}
+        legalEntityName: {type: string, minLength: 1, maxLength: 100}
+        businessType:
+          type: string
+          enum:
+            - ACCOMMODATION_HOTELS
+            - ADULT_CONTENT
+            - ADVERTISING_AND_MARKETING
+            - AGRICULTURE_SEEDS_PLANTS
+            - ALCOHOL
+            - ARCHITECTURE
+            - ARTS
+            - AUDIO_AND_VIDEO
+            - AUTOMOTIVE
+            - CHARITY
+            - CHEMICALS
+            - CLOTHING
+            - CONSTRUCTION
+            - CONSULTING_OTHER
+            - CROWDFUNDING
+            - CRYPTOCURRENCY
+            - DENTAL_SERVICES
+            - DESIGN
+            - DOCTORS_AND_MEDICAL_SERVICES
+            - HOME_CARE
+            - ELECTRICAL_PRODUCTS
+            - EVENTS_AND_ENTERTAINMENT
+            - FASHION_JEWELLERY
+            - FINANCIAL_CONSULTING_ACCOUNTING_TAXATION_AUDITING
+            - FINANCIAL_SERVICES_OTHER
+            - FINE_ARTS
+            - JEWELLERY_SALES
+            - FIREARMS_WEAPONS_AND_MILITARY_GOODS_SERVICES
+            - FITNESS_SPORTS_SERVICES
+            - FOOD_MANUFACTURING_RETAIL
+            - FREELANCE_PLATFORMS
+            - FREIGHT_TRANSPORT
+            - GAMBLING_AND_ONLINE_GAMING
+            - GOVERNMENT_SERVICES
+            - HEALTH_AND_BEAUTY_PRODUCTS_AND_SERVICES
+            - HOLDING_COMPANIES
+            - HOME_ACCESSORIES_FURNITURE
+            - HUMANITARIAN_TRANSFER
+            - INSURANCE
+            - INVESTMENTS
+            - IT_CONSULTING_AND_SERVICES
+            - IT_DEVELOPMENT
+            - IT_HOSTING_SERVICES
+            - LEGAL_SERVICES
+            - MACHINERY
+            - MAINTENANCE_SERVICES
+            - MANAGEMENT_CONSULTING
+            - MANUFACTURING
+            - MEDICAL_EQUIPMENT
+            - MONEY_SERVICE_BUSINESSES
+            - NEWSPAPERS_MAGAZINES_AND_BOOKS
+            - NURSING_AND_OTHER_CARE_SERVICES
+            - ONLINE_LEARNING
+            - PASSENGER_TRANSPORT
+            - PERFORMING_ARTS
+            - PETS
+            - PHARMACEUTICALS
+            - PHARMACY
+            - PHOTOGRAPHY
+            - PRECIOUS_STONES_DIAMONDS_AND_METALS
+            - PRINT_AND_ONLINE_MEDIA
+            - PUBLIC_SERVICES
+            - REAL_ESTATE
+            - RECRUITMENT_SERVICES
+            - RESTAURANTS_AND_CATERING
+            - RETAIL_WHOLESALE
+            - RIDESHARING_TRANSPORT_SHARING_SERVICES
+            - SCHOOLS_AND_UNIVERSITIES
+            - SCIENTIFIC_AND_TECHNICAL_CONSULTING
+            - SOFTWARE_AS_A_SERVICE
+            - SPORTING_EQUIPMENT
+            - TEACHING_AND_TUTORING
+            - TELECOMMUNICATIONS_SERVICES
+            - TOUR_OPERATORS
+            - TOYS_AND_GAMES
+            - TRANSLATION_AND_LANGUAGE_SERVICES
+            - TRANSPORT
+            - TRAVEL_AGENCIES
+            - UTILITY_SERVICES
+            - VIDEO_GAMING
+            - VITAMINS_AND_DIETARY_SUPPLEMENTS
+        businessRegistrationNumber: {type: string, minLength: 1, maxLength: 20, pattern: '^[A-Za-z0-9-]{1,20}$'}
+        businessIssueDate: {type: string, format: date}
+        businessCountryOfRegistration: {type: string, minLength: 3, maxLength: 3}
+        address: {$ref: '#/components/schemas/SenderBusinessAddress'}
+        contactDetails:
+          type: object
+          properties:
+            email: {type: string, format: email, minLength: 0, maxLength: 255, pattern: '^(([\\.a-zA-Z0-9_\\-])+@([a-zA-Z0-9_\\-])+([a-zA-Z0-9_\\-])+[\\.]{1}([a-zA-Z0-9_\\-])+[\\.]?([a-zA-Z0-9_\\-])+)*$'}
+            phone: {$ref: '#/components/schemas/SenderBusinessPhone'}
+    TransactionInformationDetails:
+      type: object
+      properties:
+        purposeOfTransactionCode:
+          type: string
+          minLength: 0
+          maxLength: 30
+          enum:
+            - PAYMENT_FOR_SERVICES
+            - SUPPLIER_PAYMENTS
+            - SALARY_DISBURSEMENT
+            - OFFICE_SUPPLIES
+            - TRAVEL_EXPENSES
+            - INVESTMENTS
+            - REAL_ESTATE
+            - LOAN_PAYMENT
+            - DONATIONS_AND_CHARITY
+            - SAVINGS_AND_DEPOSITS
+            - RENT_OR_MORTGAGE_PAYMENT
+            - UTILITY_BILLS
+            - EDUCATION_FEES
+            - MEDICAL_EXPENSES
+        sourceOfFundsCode:
+          type: string
+          minLength: 0
+          maxLength: 30
+          enum: [SALES_REVENUE, SERVICE_FEES, INVESTMENTS_RETURN, BUSINESS_RESERVES, BANK_LOAN, REDEMPTION_OF_ACCOUNT, PROPERTY_SALES, GOVERNMENT_GRANT, NGO_SUPPORT, SALARY, FREELANCE_WORK, RENTAL_INCOME]
+        proofOfSourceOfFundsCode:
+          type: string
+          minLength: 0
+          maxLength: 30
+          enum: [BANK_STATEMENTS, AUDITED_FINANCIAL_STATEMENTS, PROFIT_AND_LOSS_STATEMENTS, BALANCE_SHEETS, SALES_INVOICES, PURCHASE_ORDERS, INVESTMENT_ACCOUNT_STATEMENTS, LOAN_AGREEMENTS, GRANT_APPROVALS, GOVERNMENT_FUNDING_DOCUMENTATION]
+        intendedUseOfMGIServicesCode: {type: string, minLength: 0, maxLength: 30, enum: [BUSINESS_RELATED, CHARITY_SUPPORT, FAMILY_FRIENDS_SUPPORT, THIRD_PARTY]}
+    ConsumerProfileDetails: {type: object, properties: {name: {$ref: '#/components/schemas/BeneficiaryConsumerName'}, address: {$ref: '#/components/schemas/BeneficiaryConsumerAddress'}, mobilePhone: {$ref: '#/components/schemas/BeneficiaryConsumerPhone'}}}
+    TargetAccountDetails:
+      type: object
+      properties:
+        accountType: {type: string}
+        accountNumber: {type: string}
+        accountNumberVerification: {type: string}
+        bankIdentifier: {type: string}
+        bankIdentifier_WithLookup: {type: string}
+        bankName: {type: string}
+        bankNameText: {type: string}
+        bankBranchName: {type: string}
+        bankCode: {type: string}
+        bankBranchCode: {type: string}
+        benefIdNumber: {type: string}
+        accountExpirationMonth: {type: string}
+        accountExpirationYear: {type: string}
+        receiverPurposeOfTransactionEmigrationFlag: {type: string}
+        receiverIsCloseRelativeFlag: {type: string}
+        sendPurposeOfTransactionPartnerField: {type: string}
+        receiverAccountIssueStatePartnerField: {type: string}
+        additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactBySendAmountRequestDisbursement:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, sendAmount, receiveCurrencyCode]
+          properties:
+            partnerTransactionId: {type: string}
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            sendAmount: {$ref: '#/components/schemas/Amount'}
+            receiveCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            sender:
+              oneOf:
+                - {type: object, properties: {business: {$ref: '#/components/schemas/SenderBusinessProfileDetails'}}}
+                - {type: object, properties: {businessProfileId: {type: string}}}
+                - {type: object, properties: {partnerBusinessProfileId: {type: string}}}
+            beneficiary: {oneOf: [{type: object, properties: {consumer: {$ref: '#/components/schemas/ConsumerProfileDetails'}}}, {type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}]}
+            transactionInformation: {$ref: '#/components/schemas/TransactionInformationDetails'}
+            targetAccount: {$ref: '#/components/schemas/TargetAccountDetails'}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactByReceiveAmountRequestDisbursement:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, receiveAmount]
+          properties:
+            partnerTransactionId: {type: string}
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            receiveAmount: {$ref: '#/components/schemas/Amount'}
+            sendCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            sender:
+              oneOf:
+                - {type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}
+                - {type: object, properties: {businessProfileId: {type: string}}}
+                - {type: object, properties: {partnerBusinessProfileId: {type: string}}}
+            beneficiary: {oneOf: [{type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}, {type: object, properties: {consumer: {$ref: '#/components/schemas/ConsumerProfileDetails'}}}]}
+            transactionInformation: {$ref: '#/components/schemas/TransactionInformationDetails'}
+            targetAccount: {$ref: '#/components/schemas/TargetAccountDetails'}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactResponseDisbursement:
+      allOf:
+        - {type: object, properties: {readyForCommit: {type: boolean}}}
+        - type: object
+          properties:
+            transactionId: {type: string}
+            partnerTransactionId: {type: string}
+            businessProfileId: {type: string}
+            serviceOptionName: {type: string}
+            serviceOptionRoutingName: {type: string}
+            sendAmount: {$ref: '#/components/schemas/SendAmountDetailsDisbursement'}
+            receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsDisbursement'}
+    commitRequestDisbursement: {type: object, properties: {partnerTransactionId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    commitResponseDisbursement: {type: object, properties: {referenceNumber: {type: string}, partnerTransactionId: {type: string}, expectedPayoutDate: {type: string, format: date}}}
+    AttachmentDetails:
+      type: object
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        type: {type: string, enum: [invoice, purchase_order, delivery_slip, contract, customs_declaration, bill_of_landing, bank_statement, tax_return, financial_statement, loan_agreement, grant_approval]}
+        typeCategory: {type: string, enum: [purposeOfTransaction, sourceOfFunds, proofOfFund, proofOfAddress]}
+        file: {type: string, format: binary}
+    AttachmentInformation: {type: object, properties: {attachmentId: {type: string}, fileType: {type: string}, name: {type: string}, typeCategory: {type: string}, type: {type: string}}}
+    transactBySendAmountRequestAutoCommit:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, sendAmount, receiveCurrencyCode]
+          properties:
+            partnerTransactionId: {type: string}
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            autoCommit: {type: boolean}
+            sendAmount: {$ref: '#/components/schemas/Amount'}
+            receiveCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            sender:
+              oneOf:
+                - {type: object, properties: {business: {$ref: '#/components/schemas/SenderBusinessProfileDetails'}}}
+                - {type: object, properties: {businessProfileId: {type: string}}}
+                - {type: object, properties: {partnerBusinessProfileId: {type: string}}}
+            beneficiary:
+              oneOf:
+                - {type: object, properties: {consumer: {$ref: '#/components/schemas/ConsumerProfileDetails'}}}
+                - {type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}
+            transactionInformation: {$ref: '#/components/schemas/TransactionInformationDetails'}
+            targetAccount: {$ref: '#/components/schemas/TargetAccountDetails'}
+            attachments: {type: array, items: {$ref: '#/components/schemas/AttachmentDetails'}}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactByReceiveAmountRequestAutoCommit:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, receiveAmount]
+          properties:
+            partnerTransactionId: {type: string}
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            autoCommit: {type: boolean}
+            receiveAmount: {$ref: '#/components/schemas/Amount'}
+            sendCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            sender:
+              oneOf:
+                - {type: object, properties: {business: {$ref: '#/components/schemas/SenderBusinessProfileDetails'}}}
+                - {type: object, properties: {businessProfileId: {type: string}}}
+                - {type: object, properties: {partnerBusinessProfileId: {type: string}}}
+                - {type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}
+            beneficiary:
+              oneOf:
+                - {type: object, properties: {consumer: {$ref: '#/components/schemas/ConsumerProfileDetails'}}}
+                - {type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}
+            transactionInformation: {$ref: '#/components/schemas/TransactionInformationDetails'}
+            targetAccount: {$ref: '#/components/schemas/TargetAccountDetails'}
+            attachments: {type: array, items: {$ref: '#/components/schemas/AttachmentDetails'}}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactResponseAutoCommit:
+      allOf:
+        - type: object
+          properties:
+            transactionId: {type: string}
+            partnerTransactionId: {type: string}
+            businessProfileId: {type: string}
+            serviceOptionName: {type: string}
+            serviceOptionRoutingName: {type: string}
+            referenceNumber: {type: string}
+            expectedPayoutDate: {type: string, format: date}
+            sendAmount: {$ref: '#/components/schemas/SendAmountDetailsDisbursement'}
+            receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsDisbursement'}
+            attachmentList: {type: array, items: {$ref: '#/components/schemas/AttachmentInformation'}}
+    transactBySendAmountAsyncRequest:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, sendAmount, receiveCurrencyCode]
+          properties:
+            partnerTransactionId: {type: string}
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            sendAmount: {$ref: '#/components/schemas/Amount'}
+            receiveCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            sender:
+              oneOf:
+                - {type: object, properties: {business: {$ref: '#/components/schemas/SenderBusinessProfileDetails'}}}
+                - {type: object, properties: {businessProfileId: {type: string}}}
+                - {type: object, properties: {partnerBusinessProfileId: {type: string}}}
+            beneficiary: {oneOf: [{type: object, properties: {consumer: {$ref: '#/components/schemas/ConsumerProfileDetails'}}}, {type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}]}
+            transactionInformation: {$ref: '#/components/schemas/TransactionInformationDetails'}
+            targetAccount: {$ref: '#/components/schemas/TargetAccountDetails'}
+            attachments: {type: array, items: {$ref: '#/components/schemas/AttachmentDetails'}}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactByReceiveAmountAsyncRequest:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursement'}
+        - type: object
+          required: [destinationCountryCode, receiveAmount]
+          properties:
+            partnerTransactionId: {type: string}
+            destinationCountryCode: {type: string, minLength: 0, maxLength: 5}
+            destinationCountrySubdivisionCode: {type: string}
+            serviceOptionCode: {type: string}
+            serviceOptionRoutingCode: {type: string}
+            receiveAmount: {$ref: '#/components/schemas/Amount'}
+            sendCurrencyCode: {type: string}
+            promotionCodes: {type: array, items: {type: string}}
+            sender:
+              oneOf:
+                - {type: object, properties: {businessProfileId: {type: string}}}
+                - {type: object, properties: {partnerBusinessProfileId: {type: string}}}
+                - {type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}
+            beneficiary: {oneOf: [{type: object, properties: {business: {$ref: '#/components/schemas/BusinessProfileDetails'}}}, {type: object, properties: {consumer: {$ref: '#/components/schemas/ConsumerProfileDetails'}}}]}
+            transactionInformation: {$ref: '#/components/schemas/TransactionInformationDetails'}
+            targetAccount: {$ref: '#/components/schemas/TargetAccountDetails'}
+            attachments: {type: array, items: {$ref: '#/components/schemas/AttachmentDetails'}}
+            additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    transactResponseAsynchronous: {allOf: [{type: object, properties: {transactionId: {type: string}, partnerTransactionId: {type: string}}}]}
+    BusinessSenderDetails: {type: object, properties: {businessName: {type: string}, businessRegistrationNumber: {type: string}, businessCountryOfRegistration: {type: string}}}
+    BusinessBeneficiaryDetails: {type: object, properties: {businessName: {type: string}, businessRegistrationNumber: {type: string}, businessCountryOfRegistration: {type: string}}}
+    SendAmountDetailsDisbursementStatus:
+      type: object
+      required: [amount, fees, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        additionalCharges: {$ref: '#/components/schemas/AdditionalChargesDetails'}
+        discountsApplied: {type: object, properties: {totalDiscount: {$ref: '#/components/schemas/Amount'}, promotionDetails: {type: array, items: {$ref: '#/components/schemas/PromotionDetailStatus'}}}}
+        total: {$ref: '#/components/schemas/Amount'}
+    GetBusinessTransactionResponse:
+      type: object
+      properties:
+        transactionId: {type: string}
+        partnerTransactionId: {type: string}
+        referenceNumber: {type: string}
+        transactionSendDateTime: {type: string, format: date-time}
+        expectedPayoutDate: {type: string, format: date}
+        transactionStatus: {type: string}
+        transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}
+        originatingCountryCode: {type: string}
+        destinationCountryCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsDisbursementStatus'}
+        receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsDisbursement'}
+        sender:
+          type: object
+          properties: {businessInfo: {$ref: '#/components/schemas/BusinessSenderDetails'}, businessProfileId: {type: string}, partnerProfileId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}
+        beneficiary: {oneOf: [{type: object, properties: {business: {$ref: '#/components/schemas/BusinessBeneficiaryDetails'}}}, {type: object, properties: {consumer: {$ref: '#/components/schemas/Name'}}}]}
+        additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    GetBusinessTransactionSummaryResponse:
+      type: object
+      properties:
+        transactionId: {type: string}
+        partnerTransactionId: {type: string}
+        referenceNumber: {type: string}
+        transactionSendDateTime: {type: string, format: date-time}
+        transactionStatus: {type: string}
+        transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}
+    RefundAmountDetailsDisbursementRefund:
+      type: object
+      required: [amount, fees, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        additionalCharges: {$ref: '#/components/schemas/AdditionalChargesDetails'}
+        total: {$ref: '#/components/schemas/Amount'}
+    GetBusinessTransactionResponseDisbursementRefund:
+      type: object
+      properties:
+        transactionId: {type: string}
+        refundId: {type: string}
+        referenceNumber: {type: string}
+        transactionStatus: {type: string}
+        transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}
+        availableForRefund: {type: boolean}
+        originatingCountryCode: {type: string}
+        destinationCountryCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        sendAmount: {$ref: '#/components/schemas/SendAmountDetailsDisbursementStatus'}
+        refundAmount: {$ref: '#/components/schemas/RefundAmountDetailsDisbursementRefund'}
+        sender:
+          type: object
+          properties: {businessInfo: {$ref: '#/components/schemas/BusinessSenderDetails'}, businessProfileId: {type: string}, partnerProfileId: {type: string}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}
+        beneficiary: {oneOf: [{type: object, properties: {business: {$ref: '#/components/schemas/BusinessBeneficiaryDetails'}}}, {type: object, properties: {consumer: {$ref: '#/components/schemas/Name'}}}]}
+        additionalDetails: {$ref: '#/components/schemas/CustomFields'}
+    BusinessDetailsDisbursementRefund: {type: object, properties: {targetAudience: {type: string}, agentPartnerId: {type: string}, userLanguage: {type: string}}}
+    commitRequestDisbursementRefund:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsDisbursementRefund'}
+        - {type: object, properties: {refundId: {type: string}, refundTargetAccount: {$ref: '#/components/schemas/FundingDetails'}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}
+    AgentLocatorResponse: {type: object, properties: {radius: {type: string}, locations: {type: array, items: {$ref: '#/components/schemas/LocationDetails'}}}}
+    LocationDetails:
+      type: object
+      properties:
+        locationDetails: {$ref: '#/components/schemas/LocationInfo'}
+        locationOperatingHours: {$ref: '#/components/schemas/OperatingHours'}
+        locationPhone: {$ref: '#/components/schemas/PhoneInfo'}
+        locationServices: {$ref: '#/components/schemas/ServiceInfo'}
+    LocationInfo:
+      type: object
+      properties:
+        name: {type: string}
+        locationId: {type: string}
+        kioskId: {type: string}
+        addressLine1: {type: string}
+        addressLine2: {type: string}
+        addressLine3: {type: string}
+        city: {type: string}
+        state: {type: string}
+        country: {type: string}
+        postalCode: {type: string}
+        retailerId: {type: string}
+        pwc: {type: string}
+        bankAccountRequired: {type: string}
+        distance: {type: number}
+        distanceuom: {type: string}
+        latitude: {type: number}
+        longitude: {type: number}
+    OperatingHours: {type: object, properties: {monHours: {type: string}, tueHours: {type: string}, wedHours: {type: string}, thuHours: {type: string}, friHours: {type: string}, satHours: {type: string}, sunHours: {type: string}}}
+    PhoneInfo: {type: object, properties: {addToPhone: {type: string}, phone: {type: string}}}
+    ServiceInfo:
+      type: object
+      properties:
+        amazonCard: {type: string}
+        sendMoney: {type: string}
+        receiveMoney: {type: string}
+        billPayment: {type: string}
+        reloadOtherCard: {type: string}
+        addToPhone: {type: string}
+        payPal: {type: string}
+        moneyOrder: {type: string}
+        recCurrencies: {type: string}
+        sendCurrencies: {type: string}
+        xpressPackage: {type: string}
+        purchaseMoneygramCard: {type: string}
+        reloadMoneygramCard: {type: string}
+        receiveToCard: {type: string}
+        expressPayment: {type: string}
+        formFreeCompletion: {type: string}
+        directToAccount: {type: string}
+        payWithCash: {type: string}
+    NoContentErrorDetails: {type: object, properties: {message: {type: string}}}
+    AgentDFLRequest: {type: object, required: [agentPartnerId, posId], properties: {targetAudience: {type: string}, agentPartnerId: {type: string}, posId: {type: string}, mainOfficeId: {type: string}, baseCurrency: {type: string}}}
+    AgentDFLInfo: {type: object, properties: {dflType: {type: string}, productVariant: {type: string}, limitAmount: {type: string}, totalAmount: {type: string}, remainingAmount: {type: string}}}
+    AgentDFLResponse:
+      type: object
+      properties:
+        agentPartnerId: {type: string}
+        posId: {type: string}
+        unitProfileId: {type: string}
+        mainOfficeId: {type: string}
+        baseCurrency: {type: string}
+        agentDFLInfoList: {type: array, items: {$ref: '#/components/schemas/AgentDFLInfo'}}
+    fxRateResponse: {type: object, properties: {fxRates: {type: array, items: {$ref: '#/components/schemas/fxRateDetails'}}}}
+    fxRateDetails:
+      type: object
+      properties:
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        sendCurrencyCode: {type: string}
+        receiveCurrencyCode: {type: string}
+        fxRate: {type: number}
+        fxRateEstimated: {type: boolean}
+    TransactionFields:
+      type: object
+      properties:
+        destinationCountryCode: {type: string}
+        destinationCountrySubdivisionCode: {type: string}
+        amount: {type: integer}
+        sendCurrencyCode: {type: string}
+        receiveCurrencyCode: {type: string}
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        fieldInfo: {type: array, items: {$ref: '#/components/schemas/FieldInfo'}}
+    FieldInfo:
+      type: object
+      properties:
+        field: {type: string}
+        dataType: {type: string}
+        required: {type: boolean}
+        fieldLabel: {type: string}
+        displayOrder: {type: string}
+        fieldMin: {type: string}
+        fieldMax: {type: string}
+        regEx: {type: string}
+        exampleText: {type: string}
+        helpTextShort: {type: string}
+        helpTextLong: {type: string}
+        enumerationItem: {type: array, items: {$ref: '#/components/schemas/EnumerationItemDetails'}}
+    EnumerationItemDetails: {type: object, properties: {value: {type: string}, description: {type: string}}}
+    TransactionFieldsReceive: {type: object, properties: {fieldInfo: {type: array, items: {$ref: '#/components/schemas/FieldInfo'}}}}
+    ServiceOptionDetails: {type: object, properties: {destinationCountryCode: {type: string}, serviceOptions: {type: array, items: {$ref: '#/components/schemas/ServiceOptionFieldDetails'}}}}
+    ServiceOptionFieldDetails:
+      type: object
+      properties:
+        serviceOptionCode: {type: string}
+        serviceOptionName: {type: string}
+        serviceOptionRoutingCode: {type: string}
+        serviceOptionRoutingName: {type: string}
+        destinationCurrencyCode: {type: string}
+        partnerId: {type: string}
+        serviceOptionDisplayDescription: {type: string}
+        serviceOptionCategoryId: {type: string}
+        serviceOptionCategoryDisplayName: {type: string}
+        minReceiveAmount: {type: string}
+        minReceiveAmountCurrency: {type: string}
+        maxReceiveAmount: {type: string}
+        maxReceiveAmountCurrency: {type: string}
+        localCurrency: {type: string}
+        indicativeRateAvailable: {type: boolean}
+    EnumerationDetails: {type: object, properties: {name: {type: string}, items: {type: array, items: {$ref: '#/components/schemas/EnumerationItemDetails'}}}}
+    CountrySubdivisionDetails: {type: object, properties: {code: {type: string}, name: {type: string}}}
+    CountryDetails:
+      type: object
+      properties:
+        iso3Code: {type: string}
+        iso2Code: {type: string}
+        name: {type: string}
+        baseCurrency: {type: string}
+        sendActive: {type: boolean}
+        receiveActive: {type: boolean}
+        indicativeRateActive: {type: boolean}
+        active: {type: boolean}
+        sendCurrencies: {type: array, items: {type: string}}
+        receiveCurrencies: {type: array, items: {type: string}}
+        phoneDialCodes: {type: array, items: {type: string}}
+        subdivisions: {type: array, items: {$ref: '#/components/schemas/CountrySubdivisionDetails'}}
+    CurrencyDetails: {type: object, properties: {code: {type: string}, name: {type: string}, precision: {type: number}, symbol: {type: string}}}
+    IdentificationDocumentDetails:
+      type: object
+      properties:
+        countryCode: {type: string}
+        primaryIdentifications: {type: array, items: {$ref: '#/components/schemas/IdentificationsDetails'}}
+        secondaryIdentifications: {type: array, items: {$ref: '#/components/schemas/IdentificationsDetails'}}
+    IdentificationsDetails: {type: object, properties: {typeCode: {type: string}, description: {type: string}, fields: {type: array, items: {$ref: '#/components/schemas/IdentificationsFieldDetails'}}}}
+    IdentificationsFieldDetails:
+      type: object
+      properties:
+        dataType: {type: string}
+        fieldLabel: {type: string}
+        required: {type: boolean}
+        staticFieldOverRide: {type: boolean}
+        fieldMin: {type: string}
+        fieldMax: {type: string}
+        regEx: {type: string}
+        exampleText: {type: string}
+        enumerationItem: {type: array, items: {$ref: '#/components/schemas/EnumerationItemDetails'}}
+    LanguageInfoResponse: {type: object, properties: {languageInfos: {type: array, items: {$ref: '#/components/schemas/LanguageInfo'}}}}
+    LanguageInfo:
+      type: object
+      properties:
+        languageCode: {type: string}
+        languageISOCode: {type: string}
+        languageName: {type: string, nullable: true}
+        defaultLanguageLocaleID: {type: string, nullable: true}
+        languageLocaleInfos: {type: array, items: {$ref: '#/components/schemas/LanguageLocaleInfo'}}
+        languageTranslations: {type: array, items: {$ref: '#/components/schemas/LanguageTranslation'}}
+    LanguageLocaleInfo: {type: object, properties: {languageLocaleID: {type: string}, languageLocaleName: {type: string}}}
+    LanguageTranslation: {type: object, properties: {localeTextID: {type: integer}, languageISOCode: {type: string}, languageLocaleID: {type: string}, localeText: {type: string}}}
+    StateRegulatorDetails: {type: object, properties: {revisionNumber: {type: number}, stateRegulatorInfo: {type: array, items: {$ref: '#/components/schemas/StateRegulatorInfo'}}}}
+    StateRegulatorInfo: {type: object, properties: {dfJurisdiction: {type: string}, phoneNumber: {type: string}, stateRegulatorNames: {type: array, items: {$ref: '#/components/schemas/regulatorNames'}}, url: {type: string}}}
+    regulatorNames: {type: object, properties: {name: {type: string}, languageCode: {type: string}}}
+    BusinessDetailsConsumer: {type: object, required: [userLanguage], properties: {targetAudience: {type: string}, agentPartnerId: {type: string}, userLanguage: {type: string}}}
+    PersonalDetailsConsumer:
+      type: object
+      required: [firstName, lastName, dateOfBirth, mobilePhone]
+      properties:
+        firstName: {type: string, minLength: 1, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-''\/])*$'}
+        middleName: {type: string, minLength: 0, maxLength: 20, pattern: '^([a-zA-Z \u00C0-\u017F\-''\/])*$'}
+        lastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-''\/])*$'}
+        secondLastName: {type: string, minLength: 1, maxLength: 30, pattern: '^([a-zA-Z \u00C0-\u017F\-''\/])*$'}
+        address: {$ref: '#/components/schemas/Address'}
+        notificationPreferences: {$ref: '#/components/schemas/NotificationPreferenceDetails'}
+        mobilePhone: {$ref: '#/components/schemas/Phone'}
+        dateOfBirth: {type: string, format: date}
+    CreateConsumerProfileRequest: {allOf: [{$ref: '#/components/schemas/BusinessDetailsConsumer'}, {type: object, properties: {consumer: {$ref: '#/components/schemas/PersonalDetailsConsumer'}, additionalDetails: {$ref: '#/components/schemas/CustomFields'}}}]}
+    CreateConsumerProfileResponse: {type: object, properties: {profileId: {type: string}}}
+    SendAmountDetailsConsumer:
+      type: object
+      required: [amount, fees, total]
+      properties:
+        amount: {$ref: '#/components/schemas/Amount'}
+        fees: {$ref: '#/components/schemas/Amount'}
+        taxes: {$ref: '#/components/schemas/Amount'}
+        discountsApplied: {type: object, properties: {totalDiscount: {$ref: '#/components/schemas/Amount'}}}
+        total: {$ref: '#/components/schemas/Amount'}
+    PaginationLinks: {type: object, properties: {pageNumber: {type: number}, href: {type: string}}}
+    PaginationMetadata: {allOf: [{$ref: '#/components/schemas/PaginationHeader'}, {type: object, properties: {links: {type: array, items: {$ref: '#/components/schemas/PaginationLinks'}}}}]}
+    PaginationHeader: {type: object, properties: {totalItems: {type: number}, currentPage: {type: number}, perPage: {type: number}, totalPages: {type: number}}}
+    GetConsumerTransactionHistoryResponse:
+      type: object
+      properties:
+        consumer: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}
+        consumerTransactionHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              transactionId: {type: string}
+              referenceNumber: {type: string}
+              transactionSendDateTime: {type: string, format: date}
+              transactionStatus: {type: string}
+              transactionSubStatus: {type: array, items: {$ref: '#/components/schemas/transactionSubStatusDetails'}}
+              destinationCountryCode: {type: string}
+              serviceOptionCode: {type: string}
+              serviceOptionName: {type: string}
+              serviceOptionRoutingCode: {type: string}
+              serviceOptionRoutingName: {type: string}
+              sendAmount: {$ref: '#/components/schemas/SendAmountDetailsConsumer'}
+              receiveAmount: {$ref: '#/components/schemas/ReceiveAmountDetailsStatus'}
+              tenderType: {type: string}
+              targetAccountProfileId: {type: string}
+              targetAccountDisplayNumber: {type: string}
+              receiver: {type: object, properties: {name: {$ref: '#/components/schemas/Name'}}}
+        paginationMetadata: {$ref: '#/components/schemas/PaginationMetadata'}
+    GetConsumerSearchResponse:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {$ref: '#/components/schemas/Name'}
+              address: {$ref: '#/components/schemas/Address'}
+              mobilePhone: {$ref: '#/components/schemas/Phone'}
+              email: {type: string}
+              rewardsNumber: {type: string}
+              dateofBirth: {type: string}
+              profileId: {type: string}
+        paginationMetadata: {$ref: '#/components/schemas/PaginationMetadata'}
+    EmailDetails: {type: object, properties: {email: {type: string, format: email}}}
+    TransactPersonalDetails:
+      type: object
+      required: [dateOfBirth, birthCountryCode]
+      properties:
+        genderCode: {type: string}
+        dateOfBirth: {type: string, format: date}
+        birthCity: {type: string}
+        birthCountryCode: {type: string}
+        citizenshipCountryCode: {type: string}
+        occupationCode:
+          type: string
+          enum:
+            - ADMIN
+            - AGRICULTURE
+            - AUTOMOTIVE_SALES
+            - BANKING
+            - CLERGY
+            - COMPUTER
+            - CONSULTING
+            - CUSTOMER_CARE
+            - EDUCATION
+            - ENGINEER
+            - ENTERTAINMENT
+            - ENTREPRENEUR
+            - EXECUTIVE
+            - EXPLICIT_SERVICES
+            - FACTORY
+            - HEALTH_SERVICES
+            - HUMAN_RESOURCES
+            - LEGAL
+            - PERSONAL_SERVICES
+            - PUBLIC_OFFICIAL
+            - RESTAURANT
+            - RETIRED
+            - SPORT
+            - STUDENT
+            - UNEMPLOYED
+        politicalExposedPerson: {type: boolean}
+        nationalityCountryCode: {type: string}
+    GetProfileResponseDetails:
+      type: object
+      properties:
+        consumer:
+          type: object
+          properties:
+            name: {$ref: '#/components/schemas/Name'}
+            address: {$ref: '#/components/schemas/Address'}
+            phone: {$ref: '#/components/schemas/Phone'}
+            email: {$ref: '#/components/schemas/EmailDetails'}
+            rewardsNumber: {type: string}
+            notificationPreferences: {$ref: '#/components/schemas/NotificationPreferenceDetails'}
+            notificationLanguagePreference: {type: string}
+            personalDetails: {$ref: '#/components/schemas/TransactPersonalDetails'}
+            additionalFamilyNames: {type: array, items: {$ref: '#/components/schemas/FamilyDetailsPayout'}}
+        receivers:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {$ref: '#/components/schemas/Name'}
+              address: {$ref: '#/components/schemas/Address'}
+              phone: {$ref: '#/components/schemas/Phone'}
+              destinationCountryCode: {type: string}
+              destinationCountrySubdivisionCode: {type: string}
+              serviceOptionCode: {type: string}
+              serviceOptionName: {type: string}
+              serviceOptionRoutingCode: {type: string}
+              serviceOptionRoutingName: {type: string}
+              sendAmount: {type: object, properties: {value: {type: string}, currencyCode: {type: string}}}
+              receiveCurrencyCode: {type: string}
+              targetAccountProfileId: {type: string}
+              targetAccountDisplayNumber: {type: string}
+    UpdateConsumerProfileRequest:
+      allOf:
+        - {$ref: '#/components/schemas/BusinessDetailsConsumer'}
+        - {type: object, properties: {profileDetails: {type: object, properties: {address: {$ref: '#/components/schemas/Address'}, mobilePhone: {$ref: '#/components/schemas/Phone'}}}}}
+    UpdateConsumerProfileResponse: {type: object, required: [updateSuccess, profileId], properties: {updateSuccess: {type: boolean}, profileId: {type: string}}}
+    BusinessAddressBusinessProfile:
+      type: object
+      required: [line1, city, countryCode]
+      properties:
+        line1: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line2: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line3: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        city: {type: string, minLength: 0, maxLength: 20, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        countrySubdivisionCode: {type: string}
+        countryCode: {type: string, minLength: 3, maxLength: 3}
+        postalCode: {type: string, minLength: 2, maxLength: 10, pattern: '^([0-9a-zA-Z -])*$'}
+    BusinessPhone: {type: object, properties: {number: {type: string, minLength: 5, maxLength: 14, pattern: '^([0-9\\.\\-])*$'}, countryDialCode: {type: string, minLength: 0, maxLength: 5}}}
+    BusinessProfileDetailsBusinessProfile:
+      type: object
+      required: [businessName, legalEntityName, businessRegistrationNumber, businessCountryOfRegistration]
+      properties:
+        partnerBusinessProfileId: {type: string}
+        businessName: {type: string, minLength: 1, maxLength: 100}
+        legalEntityName: {type: string, minLength: 1, maxLength: 100}
+        businessType:
+          type: string
+          enum:
+            - ACCOMMODATION_HOTELS
+            - ADULT_CONTENT
+            - ADVERTISING_AND_MARKETING
+            - AGRICULTURE_SEEDS_PLANTS
+            - ALCOHOL
+            - ARCHITECTURE
+            - ARTS
+            - AUDIO_AND_VIDEO
+            - AUTOMOTIVE
+            - CHARITY
+            - CHEMICALS
+            - CLOTHING
+            - CONSTRUCTION
+            - CONSULTING_OTHER
+            - CROWDFUNDING
+            - CRYPTOCURRENCY
+            - DENTAL_SERVICES
+            - DESIGN
+            - DOCTORS_AND_MEDICAL_SERVICES
+            - HOME_CARE
+            - ELECTRICAL_PRODUCTS
+            - EVENTS_AND_ENTERTAINMENT
+            - FASHION_JEWELLERY
+            - FINANCIAL_CONSULTING_ACCOUNTING_TAXATION_AUDITING
+            - FINANCIAL_SERVICES_OTHER
+            - FINE_ARTS
+            - JEWELLERY_SALES
+            - FIREARMS_WEAPONS_AND_MILITARY_GOODS_SERVICES
+            - FITNESS_SPORTS_SERVICES
+            - FOOD_MANUFACTURING_RETAIL
+            - FREELANCE_PLATFORMS
+            - FREIGHT_TRANSPORT
+            - GAMBLING_AND_ONLINE_GAMING
+            - GOVERNMENT_SERVICES
+            - HEALTH_AND_BEAUTY_PRODUCTS_AND_SERVICES
+            - HOLDING_COMPANIES
+            - HOME_ACCESSORIES_FURNITURE
+            - HUMANITARIAN_TRANSFER
+            - INSURANCE
+            - INVESTMENTS
+            - IT_CONSULTING_AND_SERVICES
+            - IT_DEVELOPMENT
+            - IT_HOSTING_SERVICES
+            - LEGAL_SERVICES
+            - MACHINERY
+            - MAINTENANCE_SERVICES
+            - MANAGEMENT_CONSULTING
+            - MANUFACTURING
+            - MEDICAL_EQUIPMENT
+            - MONEY_SERVICE_BUSINESSES
+            - NEWSPAPERS_MAGAZINES_AND_BOOKS
+            - NURSING_AND_OTHER_CARE_SERVICES
+            - ONLINE_LEARNING
+            - PASSENGER_TRANSPORT
+            - PERFORMING_ARTS
+            - PETS
+            - PHARMACEUTICALS
+            - PHARMACY
+            - PHOTOGRAPHY
+            - PRECIOUS_STONES_DIAMONDS_AND_METALS
+            - PRINT_AND_ONLINE_MEDIA
+            - PUBLIC_SERVICES
+            - REAL_ESTATE
+            - RECRUITMENT_SERVICES
+            - RESTAURANTS_AND_CATERING
+            - RETAIL_WHOLESALE
+            - RIDESHARING_TRANSPORT_SHARING_SERVICES
+            - SCHOOLS_AND_UNIVERSITIES
+            - SCIENTIFIC_AND_TECHNICAL_CONSULTING
+            - SOFTWARE_AS_A_SERVICE
+            - SPORTING_EQUIPMENT
+            - TEACHING_AND_TUTORING
+            - TELECOMMUNICATIONS_SERVICES
+            - TOUR_OPERATORS
+            - TOYS_AND_GAMES
+            - TRANSLATION_AND_LANGUAGE_SERVICES
+            - TRANSPORT
+            - TRAVEL_AGENCIES
+            - UTILITY_SERVICES
+            - VIDEO_GAMING
+            - VITAMINS_AND_DIETARY_SUPPLEMENTS
+        businessRegistrationNumber: {type: string, minLength: 1, maxLength: 20, pattern: '^[A-Za-z0-9-]{1,20}$'}
+        businessIssueDate: {type: string, format: date}
+        businessCountryOfRegistration: {type: string, minLength: 3, maxLength: 3}
+        address: {$ref: '#/components/schemas/BusinessAddressBusinessProfile'}
+        contactDetails:
+          type: object
+          properties:
+            email: {type: string, format: email, minLength: 0, maxLength: 255, pattern: '^(([\\.a-zA-Z0-9_\\-])+@([a-zA-Z0-9_\\-])+([a-zA-Z0-9_\\-])+[\\.]{1}([a-zA-Z0-9_\\-])+[\\.]?([a-zA-Z0-9_\\-])+)*$'}
+            phone: {$ref: '#/components/schemas/BusinessPhone'}
+    CreateBusinessProfileRequest: {allOf: [{$ref: '#/components/schemas/BusinessDetailsDisbursementRefund'}, {type: object, properties: {businessDetails: {$ref: '#/components/schemas/BusinessProfileDetailsBusinessProfile'}}}]}
+    CreateBusinessProfileResponse: {type: object, required: [businessProfileId], properties: {businessProfileId: {type: string}, partnerBusinessProfileId: {type: string}}}
+    GetBusinessProfileResponse: {type: object, properties: {businessProfileId: {type: string}, businessProfileDetails: {$ref: '#/components/schemas/BusinessProfileDetailsBusinessProfile'}, lastModified: {$ref: '#/components/schemas/LastModified'}}}
+    LastModified: {type: object, properties: {operatorId: {type: string}, lastModifiedDate: {type: string, format: date}}}
+    GetBusinessProfileList: {type: object, properties: {profileList: {type: array, items: {$ref: '#/components/schemas/GetBusinessProfileResponse'}}, paginationMetadata: {$ref: '#/components/schemas/PaginationMetadata'}}}
+    AddressBusinessProfile:
+      type: object
+      required: [line1, city, countryCode]
+      properties:
+        line1: {type: string, minLength: 5, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line2: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        line3: {type: string, minLength: 0, maxLength: 30, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        city: {type: string, minLength: 0, maxLength: 20, pattern: '^([a-zA-Z0-9 \u00C0-\u017F\#\/\.\"\''\,\(\)\-])*$'}
+        countrySubdivisionCode: {type: string}
+        countryCode: {type: string, minLength: 3, maxLength: 3}
+        postalCode: {type: string, minLength: 2, maxLength: 10, pattern: '^([0-9a-zA-Z -])*$'}
+    UpdateBusinessProfileDetails:
+      type: object
+      required: [businessName, legalEntityName, businessCountryOfRegistration]
+      properties:
+        partnerBusinessProfileId: {type: string}
+        businessName: {type: string, minLength: 1, maxLength: 100}
+        legalEntityName: {type: string, minLength: 1, maxLength: 100}
+        businessType:
+          type: string
+          enum:
+            - ACCOMMODATION_HOTELS
+            - ADULT_CONTENT
+            - ADVERTISING_AND_MARKETING
+            - AGRICULTURE_SEEDS_PLANTS
+            - ALCOHOL
+            - ARCHITECTURE
+            - ARTS
+            - AUDIO_AND_VIDEO
+            - AUTOMOTIVE
+            - CHARITY
+            - CHEMICALS
+            - CLOTHING
+            - CONSTRUCTION
+            - CONSULTING_OTHER
+            - CROWDFUNDING
+            - CRYPTOCURRENCY
+            - DENTAL_SERVICES
+            - DESIGN
+            - DOCTORS_AND_MEDICAL_SERVICES
+            - HOME_CARE
+            - ELECTRICAL_PRODUCTS
+            - EVENTS_AND_ENTERTAINMENT
+            - FASHION_JEWELLERY
+            - FINANCIAL_CONSULTING_ACCOUNTING_TAXATION_AUDITING
+            - FINANCIAL_SERVICES_OTHER
+            - FINE_ARTS
+            - JEWELLERY_SALES
+            - FIREARMS_WEAPONS_AND_MILITARY_GOODS_SERVICES
+            - FITNESS_SPORTS_SERVICES
+            - FOOD_MANUFACTURING_RETAIL
+            - FREELANCE_PLATFORMS
+            - FREIGHT_TRANSPORT
+            - GAMBLING_AND_ONLINE_GAMING
+            - GOVERNMENT_SERVICES
+            - HEALTH_AND_BEAUTY_PRODUCTS_AND_SERVICES
+            - HOLDING_COMPANIES
+            - HOME_ACCESSORIES_FURNITURE
+            - HUMANITARIAN_TRANSFER
+            - INSURANCE
+            - INVESTMENTS
+            - IT_CONSULTING_AND_SERVICES
+            - IT_DEVELOPMENT
+            - IT_HOSTING_SERVICES
+            - LEGAL_SERVICES
+            - MACHINERY
+            - MAINTENANCE_SERVICES
+            - MANAGEMENT_CONSULTING
+            - MANUFACTURING
+            - MEDICAL_EQUIPMENT
+            - MONEY_SERVICE_BUSINESSES
+            - NEWSPAPERS_MAGAZINES_AND_BOOKS
+            - NURSING_AND_OTHER_CARE_SERVICES
+            - ONLINE_LEARNING
+            - PASSENGER_TRANSPORT
+            - PERFORMING_ARTS
+            - PETS
+            - PHARMACEUTICALS
+            - PHARMACY
+            - PHOTOGRAPHY
+            - PRECIOUS_STONES_DIAMONDS_AND_METALS
+            - PRINT_AND_ONLINE_MEDIA
+            - PUBLIC_SERVICES
+            - REAL_ESTATE
+            - RECRUITMENT_SERVICES
+            - RESTAURANTS_AND_CATERING
+            - RETAIL_WHOLESALE
+            - RIDESHARING_TRANSPORT_SHARING_SERVICES
+            - SCHOOLS_AND_UNIVERSITIES
+            - SCIENTIFIC_AND_TECHNICAL_CONSULTING
+            - SOFTWARE_AS_A_SERVICE
+            - SPORTING_EQUIPMENT
+            - TEACHING_AND_TUTORING
+            - TELECOMMUNICATIONS_SERVICES
+            - TOUR_OPERATORS
+            - TOYS_AND_GAMES
+            - TRANSLATION_AND_LANGUAGE_SERVICES
+            - TRANSPORT
+            - TRAVEL_AGENCIES
+            - UTILITY_SERVICES
+            - VIDEO_GAMING
+            - VITAMINS_AND_DIETARY_SUPPLEMENTS
+        businessIssueDate: {type: string, format: date}
+        businessCountryOfRegistration: {type: string, minLength: 3, maxLength: 3}
+        address: {$ref: '#/components/schemas/AddressBusinessProfile'}
+        contactDetails:
+          type: object
+          properties:
+            email: {type: string, format: email, minLength: 0, maxLength: 255, pattern: '^(([\\.a-zA-Z0-9_\\-])+@([a-zA-Z0-9_\\-])+([a-zA-Z0-9_\\-])+[\\.]{1}([a-zA-Z0-9_\\-])+[\\.]?([a-zA-Z0-9_\\-])+)*$'}
+            phone: {$ref: '#/components/schemas/Phone'}
+    UpdateRequest: {allOf: [{$ref: '#/components/schemas/BusinessDetailsDisbursementRefund'}, {type: object, properties: {businessDetails: {$ref: '#/components/schemas/UpdateBusinessProfileDetails'}}}]}
+    UpdateResponse: {type: object, required: [updateSuccess, businessProfileId], properties: {updateSuccess: {type: boolean}, businessProfileId: {type: string}, partnerBusinessProfileId: {type: string}}}
+    DeleteResponse: {type: object, required: [deleteSuccess, businessProfileId], properties: {deleteSuccess: {type: boolean}, businessProfileId: {type: string}, partnerBusinessProfileId: {type: string}}}
+    ErrorDetailsAccessToken:
+      type: array
+      items:
+        required: [category, message]
+        properties: {category: {type: string}, code: {type: string}, message: {type: string}, offendingFields: {minItems: 0, type: array, items: {type: object, properties: {field: {type: string}}}}}
+    GetAccessTokenResponse: {type: object, properties: {access_token: {type: string}, expires_in: {type: string}}}
