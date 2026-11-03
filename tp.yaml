@@ -1,0 +1,2395 @@
+openapi: 3.0.3
+info:
+  title: TerraPay Send Partner API — verified public documentation
+  version: '2026-11-04'
+  description: |
+    OpenAPI 3.0.3 client contract cross-checked with the TerraPay public developer API Suite on 2026-11-04.
+    Source: https://developers.terrapay.com/docs/
+
+    Covers the EIG remittance API, V2 quotations and V2/V3 corridor rates, V3 transaction enquiry,
+    validation, balances, bank/wallet reference data, transaction cancellation/reversal and file upload.
+    Partner statements and TerraPay Verify use DIFFERENT UAT hosts; these endpoints specify their own servers.
+
+    IMPORTANT PRODUCTION NOTES:
+    - X-USERNAME and SHA-256-encoded X-PASSWORD are header credentials, NOT HTTP Basic authentication.
+    - X-DATE and X-ORIGINCOUNTRY are required for EIG requests; TerraPay Verify's published examples
+      show only X-USERNAME and X-PASSWORD.
+    - The authoritative transaction lifecycle/refund signal is the `status` field from V3 enquiry or
+      the status callback, not the `transactionStatus` text/code. PENDING and REVERSAL PENDING are
+      not final failures; never refund solely on a pending acknowledgement or timeout.
+    - Use the SAME requestingOrganisationTransactionReference on transport retries. Changing it can
+      create duplicate payouts; reconcile/enquire before resubmitting.
+    - JSON money amounts and FX rates are decimal STRINGS, including up to 6 fractional digits on
+      payout/quote requests. Consume them as Java String or convert to BigDecimal in application code.
+    - Some corridor-specific fields, allowed enum values and response field conventions differ across
+      official pages and examples. No unverified cross-field constraints or HTTP error status mapping
+      are invented here. Payout corridor validation must be agreed in partner UAT.
+    - Transaction notifications are INBOUND HTTP callbacks to your own server, not methods of the
+      TerraPay outbound client. The callback payload and acknowledgement are defined as reusable
+      component schemas (StatusNotificationRequest / StatusNotificationAcknowledgement).
+    - TerraPay's quoted examples sometimes contain malformed JSON, inconsistent field spelling, or
+      unexpected lengths. Wire names mirror the JSON examples, with explanatory schema notes.
+    - This is an independently authored specification, NOT TerraPay's official published OpenAPI,
+      and it has NOT been exercised against authenticated TerraPay UAT or production.
+  contact:
+    name: TerraPay developer portal
+    url: https://developers.terrapay.com/
+externalDocs:
+  description: Official TerraPay API Suite documentation
+  url: https://developers.terrapay.com/docs/
+servers:
+- url: https://uat-connect.terrapay.com:21211
+  description: Published send-partner UAT EIG base URL; use partner-provided production URL in production.
+security:
+- TerraPayUsername: []
+  TerraPayPassword: []
+tags:
+- name: Account Status
+  description: Validate a beneficiary mobile wallet, bank account or card before sending.
+- name: Quotations
+  description: Obtain foreign exchange quotes.
+- name: Transactions
+  description: Create and view remittance transactions (P2P, P2B, B2B, B2P).
+- name: Cancel and Reversal
+  description: Cancel a pending transaction or reverse a completed one.
+- name: Balance and Statements
+  description: Partner ledger balance and statements.
+- name: Reference Data
+  description: Supported banks and wallets per destination country.
+- name: Attachments
+  description: Invoice and other remittance supporting-document uploads.
+- name: TerraPay Verify
+  description: Separately hosted account/beneficiary verification service.
+paths:
+  /eig/gsma/accounts/msisdn/{msisdn}/status:
+    get:
+      tags: [Account Status]
+      operationId: getMobileWalletAccountStatus
+      summary: View account status of a mobile wallet
+      description: |
+        Validates the status of the beneficiary mobile wallet and matches the beneficiary name supplied
+        in `bnv` with the name registered on the wallet. Only available in corridors where the receiving
+        partner exposes the account state and beneficiary name; otherwise TerraPay performs basic format
+        validation of the mobile number.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: msisdn
+        in: path
+        required: true
+        description: >-
+          Beneficiary MSISDN with country code, for example `+9779840002320`.
+          Documented length: 10-18.
+        schema:
+          type: string
+      - name: bnv
+        in: query
+        required: true
+        description: >-
+          Full name of the beneficiary as registered with the wallet provider (as per the KYC
+          document). Documented length: 1-50.
+        schema:
+          type: string
+      - name: snv
+        in: query
+        required: false
+        description: >-
+          Full name of the sender as registered with the sender partner (as per the KYC document).
+          Documented length: 1-50.
+        schema:
+          type: string
+      - name: provider
+        in: query
+        required: false
+        description: |
+          Numeric code of the mobile wallet the transaction is to be sent to. Documented length: 5-12.
+          Mandatory for non-telco wallets, optional for telco wallets. If omitted, TerraPay resolves the
+          wallet from the number (mobile network operator wallets first, then other PSPs). If set,
+          the number is validated against that operator and the validation is rejected on mismatch.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Account status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountStatusResponse"
+              example:
+                status: available
+                subStatus: "6000:Beneficiary MSISDN Validation Success"
+                lei: ""
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/accounts/{accountId}/status:
+    get:
+      tags: [Account Status]
+      operationId: getBankAccountStatus
+      summary: View account status of a bank account
+      description: >-
+        Validates the beneficiary bank account and matches the beneficiary name. Whether `bankcode`,
+        `msisdn`, `provider`, `banksubcode` and `accounttype` are mandatory is destination-country specific.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: accountId
+        in: path
+        required: true
+        description: >-
+          Beneficiary bank account number or IBAN as required in the destination country, for example
+          `2365417895` or `AT483200000012345864`. Documented length: 5-50.
+        schema:
+          type: string
+      - name: bnv
+        in: query
+        required: true
+        description: >-
+          Full name of the beneficiary as registered with the bank (as per the KYC document).
+          Documented length: 1-50.
+        schema:
+          type: string
+      - name: snv
+        in: query
+        required: false
+        description: Full name of the sender as registered with the sender partner. Documented length 1-50.
+        schema:
+          type: string
+      - name: bankcode
+        in: query
+        required: false
+        description: >-
+          Conditional. Bank code required in the destination country: IFSC code for India, SWIFT BIC
+          for all other countries. Documented length: 4-25.
+        schema:
+          type: string
+      - name: bankname
+        in: query
+        required: true
+        description: "Full name of the beneficiary bank. Documented length: 4-60."
+        schema:
+          type: string
+      - name: country
+        in: query
+        required: true
+        description: ISO alpha-2 code of the destination country, for example `NG`. Documented length 2.
+        schema:
+          type: string
+      - name: msisdn
+        in: query
+        required: false
+        description: >-
+          Conditional (destination-country specific). Beneficiary mobile number with country code.
+          Documented length: 10-18.
+        schema:
+          type: string
+      - name: provider
+        in: query
+        required: false
+        description: |
+          Conditional (destination-country specific). Numeric code of the bank the transaction is to be
+          sent to. Documented length: 7-12. If not set, TerraPay resolves the bank from `bankcode`, then
+          from `bankname` (must exactly match the bank list from the Get Bank List API). If set, the
+          bank is resolved from this code. If nothing matches the transaction is rejected.
+        schema:
+          type: string
+      - name: banksubcode
+        in: query
+        required: false
+        description: >-
+          Conditional (destination-country specific). Branch code of the bank. Documented length: 11.
+        schema:
+          type: string
+      - name: accounttype
+        in: query
+        required: false
+        description: >-
+          Conditional (destination-country specific). Supported values: `Checking`, `Savings`. The default
+          for p2p transactions is `Savings`.
+        schema:
+          type: string
+      - name: beneficiaryidtype
+        in: query
+        required: false
+        description: Beneficiary's ID document type. Optional.
+        schema:
+          type: string
+      - name: idnumber
+        in: query
+        required: false
+        description: Beneficiary's ID document number. Optional.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Account status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountStatusResponse"
+              example:
+                status: available
+                subStatus: "6000:Beneficiary Bank Account Validation Success"
+                lei: ""
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/accounts/pan/status:
+    get:
+      tags: [Account Status]
+      operationId: getCardAccountStatus
+      summary: View account status of a Primary Account Number (card)
+      description: >-
+        Validates a beneficiary card. The PAN is never sent in clear text: it is RSA-encrypted with the
+        public key shared by TerraPay and passed in the `X-PAN` header.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: X-PAN
+        in: header
+        required: true
+        description: |
+          Beneficiary Primary Account Number in encrypted form. Encrypt with
+          `RSA/ECB/OAEPWithSHA-256AndMGF1Padding` using the public key shared by TerraPay.
+          Documented length: 512-1024.
+        schema:
+          type: string
+      - name: bnv
+        in: query
+        required: true
+        description: "Full name of the beneficiary as registered with the bank. Documented length: 1-50."
+        schema:
+          type: string
+      - name: country
+        in: query
+        required: true
+        description: ISO alpha-2 code of the destination country, for example `NG`. Documented length 2.
+        schema:
+          type: string
+      - name: cardtype
+        in: query
+        required: false
+        description: Beneficiary card type, for example `credit` or `debit`.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Account status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountStatusResponse"
+              example:
+                status: available
+                subStatus: "6000:Validation Success"
+                lei: ""
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsmaV2/quotations:
+    post:
+      tags: [Quotations]
+      operationId: createQuotationV2
+      summary: Create payout quotation (V2)
+      description: |
+        Create an FX quote for p2p/p2b/b2p/b2b bank, wallet or card payout.
+        The current documented URL is /eig/gsmaV2/quotations (NOT /eig/gsma/quotations).
+        For CARD, scheme or encrypted pan is required; an invalid/mismatched scheme may return
+        business error codes 2012 or 2014. Copy `quotes[].quoteId` into
+        `internationalTransferInformation.quoteId` when creating a transfer.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationRequest"
+            examples:
+              mobileWallet:
+                summary: Quotation to a mobile wallet
+                value:
+                  requestDate: "2020-01-02 10:51:16"
+                  debitParty:
+                  - key: msisdn
+                    value: "+4491509874561"
+                  creditParty:
+                  - key: msisdn
+                    value: '+256897378380'
+                  - key: instrumentType
+                    value: WALLET
+                  - key: receivingCountry
+                    value: UG
+                  requestAmount: "100"
+                  requestCurrency: USD
+                  quotes:
+                  - sendingCurrency: USD
+                    receivingCurrency: UGX
+              bankAccount:
+                summary: Quotation to a bank account
+                value:
+                  requestDate: "2017-06-20 12:27:16"
+                  creditParty:
+                  - key: bankaccountno
+                    value: '50100002965304'
+                  - key: instrumentType
+                    value: BANK_AC
+                  - key: receivingCountry
+                    value: IN
+                  requestAmount: "500"
+                  requestCurrency: INR
+                  quotes:
+                  - sendingCurrency: USD
+                    receivingCurrency: INR
+      responses:
+        "200":
+          description: Quotation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuotationResponse"
+              example:
+                requestDate: "2017-05-03 11:00:00"
+                debitParty:
+                - key: msisdn
+                  value: "+4491509874561"
+                creditParty:
+                - key: msisdn
+                  value: "+25691508523697"
+                requestAmount: "100"
+                requestCurrency: USD
+                quotes:
+                - quoteId: QT037fQXs3LGWXea4
+                  quoteExpiryTime: "2017-05-03 11:28:00"
+                  sendingAmount: "100.000000"
+                  sendingCurrency: EUR
+                  receivingAmount: "365217"
+                  receivingCurrency: UGX
+                  fxRate: "3652.173913"
+                quotationReference: QT037fQXs3LGWXea4
+                quotationStatus: "2000:Quote Success"
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsmaV2/quotations/{prefundingCurrency}:
+    get:
+      tags: [Quotations]
+      operationId: getCorridorQuotationsV2
+      summary: Get corridor FX rates (V2)
+      description: >-
+        Returns exchange rates for active prefunding corridors, optionally filtered by payout instrument and transfer
+        kind. Official examples use /eig/gsmaV2/quotations/{currency}.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: prefundingCurrency
+        in: path
+        required: true
+        description: Prefunding currency (ISO 4217), for example `USD`.
+        schema:
+          type: string
+      - name: instrumentType
+        in: query
+        required: false
+        description: Payout instrument BANK_AC, WALLET or CARD.
+        schema:
+          type: string
+          enum:
+          - BANK_AC
+          - WALLET
+          - CARD
+      - name: transactionType
+        in: query
+        required: false
+        description: Transaction kind p2p, p2b, b2b or b2p.
+        schema:
+          type: string
+          enum:
+          - p2p
+          - p2b
+          - b2b
+          - b2p
+      responses:
+        "200":
+          description: Rates per active corridor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CorridorQuotation"
+              example:
+              - requestDate: '2020-01-02 10:51:16'
+                requestCurrency: USD
+                quotes:
+                - receivingCurrency: USD
+                  fxRate: '1'
+                  transactionType: p2p
+                  instrumentType: BANK_AC
+                  scheme: '*'
+                quotationStatus: 9000:Success
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsmaV3/quotations/{prefundingCurrency}:
+    get:
+      tags: [Quotations]
+      operationId: getCorridorQuotationsV3
+      summary: Get country-aware corridor FX rates (V3)
+      description: >
+        Version 3 corridor rate enquiry. Same prefunding-currency path variable and
+
+        instrumentType/transactionType filters as V2; V3 results add country and verticalTypes
+
+        in official JSON examples. Documentation describes scheme/country/vertical filters but
+
+        does NOT publish their exact query-parameter wire names; do not invent them here.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: prefundingCurrency
+        in: path
+        required: true
+        description: Prefunding currency (ISO 4217), for example `USD`.
+        schema:
+          type: string
+      - name: instrumentType
+        in: query
+        required: false
+        description: Payout instrument BANK_AC, WALLET or CARD.
+        schema:
+          type: string
+          enum:
+          - BANK_AC
+          - WALLET
+          - CARD
+      - name: transactionType
+        in: query
+        required: false
+        description: Transaction kind p2p, p2b, b2b or b2p.
+        schema:
+          type: string
+          enum:
+          - p2p
+          - p2b
+          - b2b
+          - b2p
+      responses:
+        "200":
+          description: Rates per active corridor.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CorridorQuotation"
+              example:
+              - requestDate: '2017-10-18 09:27:16'
+                requestCurrency: USD
+                quotes:
+                - receivingCurrency: CNY
+                  fxRate: '7.8'
+                  transactionType: p2p
+                  instrumentType: BANK_AC
+                  scheme: UP
+                  country: CN
+                  verticalTypes: '*'
+                quotationStatus: 9000:Success
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/transactions:
+    post:
+      tags: [Transactions]
+      operationId: createTransaction
+      summary: Create a transaction
+      description: |
+        Initiates an international remittance to a mobile wallet, bank account or card. The same endpoint
+        carries person-to-person and business transactions; the transaction kind is selected with `type`:
+
+        - `inttransfer` or `p2p`: person to person
+        - `p2b`: person to business
+        - `b2b`: business to business
+        - `b2p`: business to person
+
+        The business-only fields (`sendingAmount`, `payinCcyCode`, `paymentMode`, `paymentOption`,
+        `sendingPartnerCode`, `receivingPartnerCode`, `authenticationPartnerCode`, `business`) apply to
+        `p2b`/`b2b`/`b2p`. Which KYC and bank fields are mandatory is destination-country specific.
+
+        `requestingOrganisationTransactionReference` must be unique per transaction; re-using it yields
+        `3004 Duplicate transaction Id`. The response normally carries status `3050` (acknowledged,
+        pending); poll the view-transaction endpoint until the status becomes success or failed.
+
+        Call /eig/gsma/transactions_v3/{transactionReference} for authoritative lifecycle status. Reuse the same partner ID on transport retries.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransactionRequest"
+            examples:
+              p2pMobileWallet:
+                summary: P2P to a mobile wallet
+                value:
+                  amount: "500"
+                  currency: NPR
+                  type: inttransfer
+                  descriptionText: Gift for my brother
+                  requestDate: "2021-05-23 08:19:36"
+                  requestingOrganisationTransactionReference: SrcTxnId001
+                  debitParty:
+                  - key: msisdn
+                    value: "+971810456234"
+                  creditParty:
+                  - key: msisdn
+                    value: "+9779840002320"
+                  senderKyc:
+                    nationality: AE
+                    dateOfBirth: "1967-05-28"
+                    gender: M
+                    idDocument:
+                    - idType: VOTER_CARD
+                      idNumber: "13321115521"
+                      issueDate: "1967-05-28"
+                      expiryDate: "2067-05-28"
+                      issuerCountry: AE
+                    postalAddress:
+                      addressLine1: 49 , park street
+                      addressLine2: "12"
+                      addressLine3: "12"
+                      city: "12"
+                      stateProvince: "12"
+                      postalCode: "50000"
+                      country: US
+                    subjectName:
+                      firstName: Test
+                      middleName: ""
+                      lastName: Sender
+                      fullName: Test Sender
+                  recipientKyc:
+                    subjectName:
+                      firstName: David
+                      lastName: Robinson
+                      fullName: David Robinson
+                  internationalTransferInformation:
+                    quoteId: QT037C1NQ6BHMV59A3
+                    receivingCountry: NP
+                    remittancePurpose: Family Maintenance
+                    sourceOfFunds: Salary
+                    relationshipSender: Brother
+              p2pBankAccount:
+                summary: P2P to a bank account
+                value:
+                  amount: "500"
+                  currency: INR
+                  type: inttransfer
+                  descriptionText: Gift for my brother
+                  requestDate: "2021-05-23 08:19:36"
+                  requestingOrganisationTransactionReference: SrcTxnId002
+                  debitParty:
+                  - key: msisdn
+                    value: "+971810456234"
+                  creditParty:
+                  - key: bankaccountno
+                    value: "50100002965304"
+                  - key: organisationid
+                    value: HDFC Bank
+                  - key: sortcode
+                    value: HDFC0001626
+                  senderKyc:
+                    nationality: AE
+                    dateOfBirth: "1967-05-28"
+                    gender: M
+                    idDocument:
+                    - idType: VOTER_CARD
+                      idNumber: "13321115521"
+                      issueDate: "1967-05-28"
+                      expiryDate: "2067-05-28"
+                      issuerCountry: AE
+                    postalAddress:
+                      addressLine1: 49 , park street
+                      addressLine2: "12"
+                      addressLine3: "12"
+                      city: "12"
+                      stateProvince: "12"
+                      postalCode: "50000"
+                      country: US
+                    subjectName:
+                      firstName: Test
+                      middleName: ""
+                      lastName: Sender2
+                      fullName: Test Sender2
+                  recipientKyc:
+                    subjectName:
+                      firstName: Deepa
+                      lastName: Jain
+                      fullName: Deepa Jain
+                  internationalTransferInformation:
+                    quoteId: QR037C1NA6ZXBSQ88B
+                    receivingCountry: IN
+                    remittancePurpose: Family Maintenance
+                    sourceOfFunds: Salary
+                    relationshipSender: Brother
+      responses:
+        "200":
+          description: Transaction accepted (typically status `3050:Remit Acknowledged`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionResponse"
+              example:
+                amount: "100000.01"
+                currency: NGN
+                type: inttransfer
+                requestDate: "2017-03-20T06:19:36.969Z"
+                requestingOrganisationTransactionReference: partnerRefId1234
+                debitParty:
+                - key: msisdn
+                  value: "+33472034605"
+                creditParty:
+                - key: msisdn
+                  value: "+23410706056"
+                transactionStatus: "3050:Remit Acknowledged."
+                transactionReference: TPKM000000056269
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/transactions_v3/{transactionReference}:
+    get:
+      tags: [Transactions]
+      operationId: getTransactionStatusV3
+      summary: Enquire transaction lifecycle (V3)
+      description: "Returns the current lifecycle status by TerraPay ID OR original partner transaction ID.\n\
+        Use response.status as the authoritative settlement/refund decision; response.transactionStatus\ncontains
+        descriptive numeric codes and MUST NOT be used for final refund logic.\n"
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: transactionReference
+        in: path
+        required: true
+        description: >-
+          Either the unique reference returned by TerraPay in the create-transaction response
+          (for example `TPKM000000056269`) or the partner's own
+          `requestingOrganisationTransactionReference`.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Transaction details and status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionResponse"
+              example:
+                amount: "100000.01"
+                currency: NGN
+                type: inttransfer
+                requestDate: "2017-03-20T06:19:36.969Z"
+                requestingOrganisationTransactionReference: partnerRefId1234
+                debitParty:
+                - key: msisdn
+                  value: "+33472034605"
+                creditParty:
+                - key: msisdn
+                  value: "+23410706056"
+                transactionStatus: "3000:Remit Success"
+                transactionReference: TPKM000000056269
+                status: SUCCESS
+                creditingOrganisationTransactionReference: '12345678901'
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/remitCancel:
+    post:
+      tags: [Cancel and Reversal]
+      operationId: cancelTransaction
+      summary: Cancel a transaction
+      description: |
+        Cancels an initiated transaction that has not yet been credited. Cancellation only succeeds while
+        the transaction is still pending on TerraPay and has not been sent to the receiving partner.
+
+        Result codes: `3033` Cancel Success; `15001` Credit already in process; `15002` Transaction in
+        Success state; `15003` Transaction in Fail state; `15004` Transaction not found; `15005` Transaction
+        already in canceled state.
+
+        The documentation's curl sample calls the path with a trailing slash; the URL specification
+        gives it without.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelTransactionRequest"
+            example:
+              reason: cancelling
+              txnId: TPSE000000298941
+      responses:
+        "200":
+          description: Cancel result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelTransactionResponse"
+              example:
+                responseMessage: Cancel Success
+                statusCode: "3033"
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/reversalInitiate:
+    post:
+      tags: [Cancel and Reversal]
+      operationId: reverseTransaction
+      summary: Reverse a transaction
+      description: |
+        Reverses a completed transfer, bringing the money back from the beneficiary's account to the
+        sender's account.
+
+        Result codes: `16000` Reversal Success; `16001` Transaction not found; `16002` Reversal Rejected;
+        `16003` Reversal Pending; `16004` Reversal cannot be done at this stage; `16005` Reversal already
+        raised; `16006` Transaction already reversed; `16007` Transaction is in failed state.
+
+        The documentation shows this path both with and without a trailing slash; the HTTP request line
+        and the code samples use it without.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReverseTransactionRequest"
+            example:
+              reversalReason: reversalreason
+              txnId: TPKM000000056269
+      responses:
+        "200":
+          description: Reversal result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReverseTransactionResponse"
+              example:
+                responseCode: "16003"
+                responseMessage: Reversal Pending
+                txnId: TPYY000000783294
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/accounts/all/balance_v1:
+    get:
+      tags: [Balance and Statements]
+      operationId: getAllLedgerBalances
+      summary: Get balance of all ledgers
+      description: Live balances for partner ledgers; response is an ARRAY even for a single currency. 
+        Published URL ends in /balance_v1.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      responses:
+        "200":
+          description: Balance of each active ledger.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LedgerBalance"
+              example:
+              - currency: USD
+                currentBalance: "1000.000000"
+                status: available
+                account: TL-TERRAPAY-US-SENDER-USD
+              - currency: NGN
+                currentBalance: "3000000.000000"
+                status: available
+                account: TL-TERRAPAY-NG-SENDER-NGN
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/gsma/accounts/{currency}/balance_v1:
+    get:
+      tags: [Balance and Statements]
+      operationId: getLedgerBalance
+      summary: Get balance of the ledger of a single currency
+      description: Live balances for partner ledgers; response is an ARRAY even for a single currency. 
+        Published URL ends in /balance_v1.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: currency
+        in: path
+        required: true
+        description: Ledger currency (ISO 4217), for example `USD`.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Ledger balance.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LedgerBalance"
+              example:
+              - currency: USD
+                currentBalance: "1000.000000"
+                status: available
+                account: TL-TERRAPAY-US-SENDER-USD
+        default:
+          $ref: "#/components/responses/Error"
+  /PartnerPortalReports/partnerstatements_v1:
+    get:
+      tags: [Balance and Statements]
+      operationId: getPartnerStatementsV1
+      summary: Get partner ledger statement entries (v1)
+      description: |
+        Statements have a separate host/port and path from the remittance EIG API.
+        The official sample URL includes ledgerBookName, although its request table lists only start and end;
+        ledgerBookName is therefore exposed but not made unconditionally required by this spec.
+        Amounts, including blank convertedAmount for LIQUIDITY, are JSON strings. Do not assume the
+        amounts are always negative for TRANSFERRED: published JSON examples show positive values,
+        while the statement narrative describes debits as negative.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: start
+        in: query
+        required: true
+        description: Beginning of the query interval, ISO 8601 UTC date-time, for example 
+          `2020-04-29T13:00:00Z`.
+        schema:
+          type: string
+          format: date-time
+      - name: end
+        in: query
+        required: true
+        description: End of the query interval, ISO 8601 UTC date-time, for example `2020-05-22T19:38:59Z`.
+        schema:
+          type: string
+          format: date-time
+      - name: ledgerBookName
+        in: query
+        required: false
+        description: Ledger book/account identifier, e.g. TL-TERRAPAY-GB-SENDER-USD. Appears in published 
+          sample URL; mandatory/optional is not specified in request table.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Statement entries for the period.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Statement"
+              example:
+              - creationTime: '2020-04-29T13:00:00Z'
+                modifiedTime: '2020-04-29T13:00:00Z'
+                type: LIQUIDITY
+                internalRef: TP000000000
+                externalRef: ''
+                amount: '1000.00'
+                currency: USD
+                convertedAmount: ''
+                convertedCurrency: ''
+                balance: '1000.00'
+                message: Transfer with reference 123456
+              - creationTime: '2020-04-29T13:00:00Z'
+                modifiedTime: '2020-04-29T13:00:00Z'
+                type: TRANSFERRED
+                internalRef: TP000000001
+                externalRef: TW000000000
+                amount: '10.12'
+                currency: USD
+                convertedAmount: '38280.09'
+                convertedCurrency: UGX
+                balance: '989.88'
+                message: 3000:Remit Success
+        default:
+          $ref: "#/components/responses/Error"
+      servers:
+      - url: https://uat-engage.terrapay.com:21228
+        description: Documented partner statement/reporting UAT host
+  /eig/getbanklist/{countryCode}:
+    get:
+      tags: [Reference Data]
+      operationId: getBankList
+      summary: Get bank list
+      description: >-
+        Returns the banks supported in a destination country with their bank code, provider code and status.
+        Note: this endpoint lives under `/eig/`, not `/eig/gsma/`.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: countryCode
+        in: path
+        required: true
+        description: ISO alpha-2 code of the destination country, for example `BD`.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Banks supported in the country.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankListResponse"
+              example:
+                countryCode: BD
+                lastUpdatedOn: "2021-01-12 21:40:00.051"
+                banks:
+                - bankName: DUTCH BANGLA BANK LIMITED
+                  bankCode: DBBLBDDH
+                  providerCode: ""
+                  status: ACTIVE
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/getwalletlist/{countryCode}:
+    get:
+      tags: [Reference Data]
+      operationId: getWalletList
+      summary: Get wallet list
+      description: >-
+        Returns the wallets supported in a destination country with their provider code.
+        Note: this endpoint lives under `/eig/`, not `/eig/gsma/`.
+      parameters:
+      - $ref: "#/components/parameters/XDate"
+      - $ref: "#/components/parameters/XOriginCountry"
+      - name: countryCode
+        in: path
+        required: true
+        description: ISO alpha-2 code of the destination country, for example `BD`.
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Wallets supported in the country.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletListResponse"
+              example:
+                countryCode: BD
+                wallets:
+                - walletName: BKASH
+                  providerCode: "88001"
+                - walletName: ROCKET
+                  providerCode: "88002"
+                - walletName: NAGAD
+                  providerCode: "88003"
+        default:
+          $ref: "#/components/responses/Error"
+  /eig/fileUpload:
+    post:
+      tags:
+      - Attachments
+      operationId: uploadTransactionDocument
+      summary: Upload a document for a remittance transaction
+      description: "Upload supporting invoice (mandatory for China CNY business payouts) or other\nrequired supporting
+        document. The documentation says accepted types PNG/JPG/PDF, but its curl\nsample uploads a DOCX; file
+        type acceptance must be confirmed with TerraPay UAT. No file\nextension or content-type restriction is
+        enforced by this client spec.\n"
+      parameters:
+      - $ref: '#/components/parameters/XDate'
+      - $ref: '#/components/parameters/XOriginCountry'
+      - name: customerType
+        in: query
+        required: true
+        description: 'Document customer type: sender or receiver.'
+        schema:
+          type: string
+          enum:
+          - sender
+          - receiver
+      - name: docType
+        in: query
+        required: true
+        description: Document type; Invoice is the only example documented.
+        schema:
+          type: string
+      - name: transactionId
+        in: query
+        required: true
+        description: TerraPay OR partner-generated transaction identifier.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Supporting document file.
+      responses:
+        '200':
+          description: Document upload result; inspect responseCode, not just HTTP status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+              example:
+                responseCode: '19000'
+                responseMessage: File uploaded successfully.
+        default:
+          $ref: '#/components/responses/Error'
+  /tpverify/api/v1/verify:
+    post:
+      tags:
+      - TerraPay Verify
+      operationId: verifyBeneficiary
+      summary: Verify beneficiary account and name (TerraPay Verify)
+      description: "A separately hosted beneficiary-verification service, NOT the legacy EIG status GET.\nIts
+        official examples have X-USERNAME and X-PASSWORD (no X-DATE or X-ORIGINCOUNTRY).\nThe TerraPay Verify
+        subsection says the password is CASE-SENSITIVE, whereas the EIG\nsection calls credentials case-insensitive.
+        Preserve the credential value exactly.\nThe result is a statusCode/accountMatch/nameMatch envelope, not
+        the EIG account status schema.\n"
+      servers:
+      - url: https://uat-tpverify.terrapay.com
+        description: Documented TerraPay Verify UAT host
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerraPayVerifyRequest'
+            examples:
+              wallet:
+                value:
+                  beneficiaryName: Name
+                  paymentRef: '+883432573478'
+                  provider: '12345'
+                  country: IN
+              bank:
+                value:
+                  beneficiaryName: Name
+                  instrumentType: Bank
+                  country: VN
+                  bankCode: ABCDEF12XXX
+                  bankName: Bank Name
+                  bankSubCode: '0000'
+                  paymentRef: ''
+                  idType: ''
+                  idNumber: ''
+                  currency: ''
+      responses:
+        '200':
+          description: Verification outcome, including failed business validation; inspect 
+            statusCode/accountMatch/nameMatch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerraPayVerifyResponse'
+              example:
+                accountMatch: MTCH
+                nameMatch: MTCH
+                verificationId: TPV037FNEZJLCAOX0D
+                verificationDate: '2026-01-30 06:09:33'
+        default:
+          description: TerraPay Verify may return the same result envelope for a validation error; HTTP 
+            status mappings are not documented.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TerraPayVerifyResponse'
+components:
+  securitySchemes:
+    TerraPayUsername:
+      type: apiKey
+      in: header
+      name: X-USERNAME
+      description: Partner user name issued by TerraPay during onboarding (case-insensitive).
+    TerraPayPassword:
+      type: apiKey
+      in: header
+      name: X-PASSWORD
+      description: >-
+        SHA-256-encoded partner X-PASSWORD header credential; keep exact casing for TerraPay Verify (docs differ
+        from EIG text). Never treat as HTTP Basic.
+  parameters:
+    XDate:
+      name: X-DATE
+      in: header
+      required: true
+      description: Request date and time in UTC, format `YYYY-MM-DD HH:mm:ss`.
+      schema:
+        type: string
+      example: "2026-11-04 00:00:00"
+    XOriginCountry:
+      name: X-ORIGINCOUNTRY
+      in: header
+      required: true
+      description: ISO alpha-2 code of the country in which the transaction is created, for example `US`.
+      schema:
+        type: string
+      example: US
+  responses:
+    Error:
+      description: >-
+        Error. TerraPay documents the body but not the HTTP status codes; see `x-terrapay-response-codes`
+        for the error codes.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            authentication:
+              value:
+                error:
+                  errorCategory: authorisation
+                  errorCode: "1003"
+                  errorDescription: Authentication failed. Username or Password is incorrect.
+                  errorDateTime: "2017-05-02 11:00:00"
+            businessRule:
+              value:
+                serverCorrelationId: TPKM000000056269
+                clientCorrelationId: partnerRefId1234
+                error:
+                  errorCategory: businessRule
+                  errorCode: "3032"
+                  errorDescription: Remit Failed.
+                  errorDateTime: "2017-05-02 11:00:00"
+  schemas:
+    ErrorResponse:
+      type: object
+      description: >-
+        Error envelope. `serverCorrelationId` and `clientCorrelationId` appear on transaction calls
+        (the latter echoes the partner's transaction reference).
+      properties:
+        serverCorrelationId:
+          type: string
+          description: TerraPay transaction reference (empty if the transaction was not created).
+        clientCorrelationId:
+          type: string
+          description: Partner transaction reference echoed back.
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+        status:
+          type: string
+          description: V3 enquiry failure examples include status FAILED or NULL; may be absent on other 
+            APIs.
+    ErrorDetail:
+      type: object
+      properties:
+        errorCategory:
+          type: string
+          description: Error category, for example `authorisation` or `businessRule`.
+        errorCode:
+          type: string
+          description: Numeric error code as a string, for example `1003`. See `x-terrapay-response-codes`.
+        errorDescription:
+          type: string
+        errorDateTime:
+          type: string
+          description: Time of the error, format `YYYY-MM-DD HH:mm:ss`.
+    PartyKeyValue:
+      type: object
+      description: |
+        Key/value pair describing an account identifier. Documented keys:
+        - `debitParty`: `msisdn` (sender mobile number with country code), `organisationid` (sending organisation name),
+          `bankaccountno` (sender account/IBAN/card number).
+        - `creditParty`: `msisdn`, `bankaccountno`, `receivingCountry` (quotation only, ISO alpha-2), `pan`
+          (RSA-encrypted card number), `cardtype` (`credit`/`debit`), `accounttype` (`Checking`/`Savings`),
+          `sortcode` (IFSC for India, SWIFT BIC elsewhere), `organisationid` (beneficiary bank name),
+          `banksubcode` (branch/routing code), `beneficiarySmsNotify` (`true`/`false`, business transactions),
+          `accountIBAN`, `accountAdditionalNo1`, `accountAdditionalNo2`, and (in the business examples)
+          `bankBranchName`, `accountName`.
+        Responses may return further keys (mobile wallet and bank account identifiers).
+      required: [key, value]
+      properties:
+        key:
+          type: string
+          example: msisdn
+        value:
+          type: string
+          example: "+4491509874561"
+    AccountStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [available, unavailable, unregistered]
+          description: If `available` the account can receive funds; otherwise transactions sent to it will 
+            fail.
+        subStatus:
+          type: string
+          description: Provider-specific status, format `<code>:<message>`, for example `6000:Beneficiary 
+            MSISDN Validation Success`.
+        lei:
+          type: string
+          description: Legal Entity Identifier of the organisation holding the account (20 characters when 
+            present).
+    QuotationRequest:
+      type: object
+      required:
+      - requestDate
+      - requestAmount
+      - requestCurrency
+      - creditParty
+      - quotes
+      properties:
+        requestDate:
+          type: string
+          description: Creation date and time of the request as supplied by the client, `YYYY-MM-DD 
+            HH:mm:ss`. Documented length 19.
+          example: "2020-01-02 10:51:16"
+        type:
+          type: string
+          description: Transaction kind p2p/p2b/b2p/b2b; optional for p2p, required for business quotations.
+            Examples also include blank and *.
+        requestAmount:
+          type: string
+          description: 'Decimal amount supplied as a JSON string, with precision up to 6 decimal places as applicable
+            to currency/country (source table: 30,6).'
+          example: "100"
+        requestCurrency:
+          type: string
+          description: |
+            ISO 4217 currency of `requestAmount`. If it is the source currency a forward quote is done;
+            if it is the destination currency a reverse quote is done. Documented length 3.
+          example: USD
+        debitParty:
+          type: array
+          description: Sender identifier. Optional; key `msisdn` with the sender mobile number.
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        creditParty:
+          type: array
+          description: Array of key/value identifiers. V2 expects receivingCountry and instrumentType 
+            (BANK_AC, WALLET or CARD). CARD additionally requires scheme or RSA-encrypted pan. Bank/wallet 
+            may be inferred from other keys in some flows; consult corridor rules.
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        quotes:
+          type: array
+          description: Sending and receiving ISO 4217 currency pairs.
+          items:
+            $ref: "#/components/schemas/QuoteRequestItem"
+        scheme:
+          type: string
+          description: Payment network/scheme code (for example VISA, MC, UP), conditional on corridor and 
+            instrument; CARD quotes require scheme or encrypted PAN. See country-specific scheme list.
+    QuoteRequestItem:
+      type: object
+      required: [sendingCurrency, receivingCurrency]
+      properties:
+        sendingCurrency:
+          type: string
+          description: Currency of the debtor (ISO 4217). Documented length 3.
+          example: USD
+        receivingCurrency:
+          type: string
+          description: Currency of the creditor (ISO 4217). Documented length 3.
+          example: UGX
+    QuotationResponse:
+      type: object
+      properties:
+        requestDate:
+          type: string
+          description: Timestamp as sent in the request.
+        requestAmount:
+          type: string
+        requestCurrency:
+          type: string
+        debitParty:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        creditParty:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        quotes:
+          type: array
+          description: >-
+            Quotation objects carrying the exchange rate and the source and destination amounts. The quote
+            reference must be used in the transaction as acceptance of the rate.
+          items:
+            $ref: "#/components/schemas/Quote"
+        quotationReference:
+          type: string
+          description: TerraPay quote reference.
+        quotationStatus:
+          type: string
+          description: Status of the quotation, format `<code>:<message>`, for example `2000:Quote Success`.
+        scheme:
+          type: string
+          description: Payment scheme applied to this quote (can be blank or *).
+        type:
+          type: string
+          description: Transaction type associated with quotation, if returned.
+    Quote:
+      type: object
+      properties:
+        quoteId:
+          type: string
+          description: Unique id of this quotation; pass it as `internationalTransferInformation.quoteId` 
+            when creating the transaction.
+        quoteExpiryTime:
+          type: string
+          description: Expiry timestamp as a string (official examples use YYYY-MM-DD HH:mm:ss; parameter 
+            table inconsistently says minutes).
+        sendingAmount:
+          type: string
+          description: Amount payable by the sender.
+        sendingCurrency:
+          type: string
+        receivingAmount:
+          type: string
+          description: Amount the beneficiary will receive.
+        receivingCurrency:
+          type: string
+        fxRate:
+          type: string
+          description: FX rate as a decimal string including markups; do not deserialize to double.
+        scheme:
+          type: string
+          description: Payment scheme applied to this quote (can be blank or *).
+        type:
+          type: string
+          description: Transaction type associated with quote; can be blank.
+        instrumentType:
+          type: string
+          description: Payout instrument (BANK_AC, WALLET or CARD); one official example abbreviates CARD to
+            C.
+    CorridorQuotation:
+      type: object
+      properties:
+        requestDate:
+          type: string
+        requestCurrency:
+          type: string
+          description: The prefunding currency.
+        quotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/CorridorQuote"
+        quotationStatus:
+          type: string
+          description: Format `<code>:<message>`, for example `9000:Success`.
+    CorridorQuote:
+      type: object
+      properties:
+        receivingServiceProvider:
+          type: string
+          description: Receiving country code (for example `GH`).
+        receivingCurrency:
+          type: string
+        fxRate:
+          type: string
+        transactionType:
+          type: string
+          nullable: true
+          description: Transfer kind (p2p/p2b/b2p/b2b); may be null if not applicable.
+        instrumentType:
+          type: string
+          nullable: true
+          description: BANK_AC, WALLET or CARD; may be null.
+        scheme:
+          type: string
+          nullable: true
+          description: Scheme used for rate (examples use *, MC, VISA, UP); may be null.
+        country:
+          type: string
+          description: Country of payout (V3). Rates for the same currency may vary by country.
+        verticalTypes:
+          type: string
+          description: V3 JSON samples use verticalTypes (plural), e.g. *; parameter table calls this 
+            verticalType (singular).
+        verticalType:
+          type: string
+          description: V3 response table uses verticalType (singular); samples use verticalTypes (plural).
+    CreateTransactionRequest:
+      type: object
+      required:
+      - amount
+      - currency
+      - type
+      - requestDate
+      - requestingOrganisationTransactionReference
+      - debitParty
+      - creditParty
+      - internationalTransferInformation
+      properties:
+        requestDate:
+          type: string
+          description: >-
+            Request creation timestamp. Documented as YYYY-MM-DD HH:mm:ss; some official examples use ISO 8601
+            UTC, so no fixed date-time format is enforced.
+          example: "2021-05-23 08:19:36"
+        amount:
+          type: string
+          description: Beneficiary payout amount as JSON decimal string; supports up to 6 fractional digits 
+            depending on payout currency and rules.
+          example: "500"
+        currency:
+          type: string
+          description: Destination amount currency, ISO 4217. Documented length 3.
+          example: NPR
+        type:
+          type: string
+          description: |
+            Harmonised transaction type: `inttransfer` or `p2p` (person to person), `p2b`, `b2b`, `b2p`.
+          example: inttransfer
+        descriptionText:
+          type: string
+          nullable: true
+          description: Free-format description, can appear on the receiver's statement. Optional. Documented
+            length 0-20.
+        requestingOrganisationTransactionReference:
+          type: string
+          description: "Unique sending-partner transaction ID; keep identical when retrying the SAME transaction.\n\
+            If changed, TerraPay may process a second payout. Source says duplicates can incur loss of funds.\n"
+        provider:
+          type: string
+          description: >-
+            Receiving provider code (5-20 chars in current transaction reference table; may contain non-numeric
+            codes such as CO_BREB_PAY or EG_INSTAPAY). Required for PSP wallet/selected corridor rules.
+        debitParty:
+          type: array
+          description: Sender identification key/value pairs; key msisdn is mandatory in the current main 
+            transaction reference table.
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        creditParty:
+          type: array
+          description: >-
+            Payout instrument identifiers: msisdn (WALLET), bankaccountno/sortcode/organisationid (BANK_AC) or
+            encrypted pan (CARD); actual conditionals are country-specific.
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        senderKyc:
+          $ref: "#/components/schemas/SenderKyc"
+        recipientKyc:
+          $ref: "#/components/schemas/RecipientKyc"
+        internationalTransferInformation:
+          $ref: "#/components/schemas/InternationalTransferInformation"
+          description: Quote acceptance, payout country, remittance purpose and source of funds; field 
+            requirements can be corridor-specific.
+        sendingAmount:
+          type: string
+          description: Business transactions only. Pay-in amount, 2 decimal places. Mandatory for 
+            p2b/b2b/b2p.
+        payinCcyCode:
+          type: string
+          description: >-
+            Business transactions only. Pay-in currency, ISO 4217. Mandatory for p2b/b2b/b2p.
+            The parameter table names this `payingCcyCode`, but every JSON sample uses `payinCcyCode`.
+        paymentMode:
+          type: string
+          description: Business transactions only. Type of payment, for example Cash, Card, Bank account or 
+            Others. Mandatory. Documented length 0-20.
+        authenticationPartnerCode:
+          type: string
+          description: Business transactions only. Multi-factor authentication partner code. Optional. 
+            Documented length 4-20.
+        paymentOption:
+          type: string
+          description: Business transactions only. `Mobile Wallet` or `Account Credit`. Mandatory. 
+            Documented length 4-100.
+        sendingPartnerCode:
+          type: string
+          description: Business transactions only. Unique send partner code. Optional. Documented length 
+            4-20.
+        receivingPartnerCode:
+          type: string
+          description: >-
+            Business transactions only. Unique receive partner code. Optional. Documented length 4-20.
+            The parameter table spells this `recievingPartnerCode`, but every JSON sample uses `receivingPartnerCode`.
+        business:
+          $ref: "#/components/schemas/BusinessInformation"
+        scheme:
+          type: string
+          description: Payment scheme, e.g. VISA/MC/UP; conditional on instrument/corridor. Included in 
+            TerraPay transaction examples.
+      description: "Create a payment transfer (p2p/p2b/b2b/b2p) using the same transaction endpoint.\nFields inside
+        KYC/business/creditParty are conditional by destination country, payment\ninstrument, partner, and type.
+        This contract does not assert unverified cross-field rules.\n"
+    TransactionResponse:
+      type: object
+      properties:
+        requestDate:
+          type: string
+          description: Creation date and time as supplied by the client.
+        amount:
+          type: string
+          description: Principal transaction amount.
+        currency:
+          type: string
+          description: Currency of the principal transaction amount.
+        type:
+          type: string
+          description: Harmonised transaction type.
+        requestingOrganisationTransactionReference:
+          type: string
+          description: Partner transaction reference as submitted.
+        transactionStatus:
+          type: string
+          description: >-
+            Human-readable provider response code/message (e.g., 3050:Remit Acknowledged). NOT authoritative for
+            refund decisions; rely on status.
+        transactionReference:
+          type: string
+          description: Unique reference assigned by TerraPay.
+        debitParty:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        creditParty:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartyKeyValue"
+        status:
+          type: string
+          description: Authoritative lifecycle status. V3 uses SUCCESS, FAILED, CANCELLED, RETURNED, 
+            PENDING, REVERSAL PENDING, REVERSAL REJECTED. Use for refund decisions; NOT transactionStatus.
+          enum:
+          - SUCCESS
+          - FAILED
+          - CANCELLED
+          - RETURNED
+          - PENDING
+          - REVERSAL PENDING
+          - REVERSAL REJECTED
+        creditingOrganisationTransactionReference:
+          type: string
+          description: Transaction reference generated by the receiving partner (can be empty when pending).
+    SenderKyc:
+      type: object
+      description: >-
+        Sender KYC. Mandatory for person-to-person and person-to-business transactions; for b2b/b2p send
+        an empty object. Field requirements may vary by destination country.
+      properties:
+        nationality:
+          type: string
+          description: ISO alpha-2 nationality. Mandatory (P2P/P2B). Documented length 2.
+        dateOfBirth:
+          type: string
+          description: "`YYYY-MM-DD`. Mandatory (P2P/P2B)."
+        countryOfBirth:
+          type: string
+          description: ISO alpha-2 country of birth. Optional.
+        gender:
+          type: string
+          enum: [M, F, U]
+          description: "(M)ale, (F)emale, (U)nspecified. Optional."
+        primaryContactCountryCode:
+          type: string
+          description: Primary contact country code, ISO alpha-2. Mandatory for P2B.
+        primaryContactNo:
+          type: string
+          description: Primary contact number. Mandatory for P2B. Documented length 10-15.
+        primaryContactNoType:
+          type: string
+          description: Contact number type, for example Personal or Office. Mandatory for P2B. Documented 
+            length 4-50.
+        idDocument:
+          type: array
+          items:
+            $ref: "#/components/schemas/IdDocument"
+        postalAddress:
+          $ref: "#/components/schemas/PostalAddress"
+        subjectName:
+          $ref: "#/components/schemas/SubjectName"
+    RecipientKyc:
+      type: object
+      description: >-
+        Beneficiary KYC. Only the name is always required; every other field is mandatory or optional
+        depending on the destination country (see TerraPay's country-specific parameter and document lists).
+        For b2b/p2b send an empty object.
+      properties:
+        nationality:
+          type: string
+          description: ISO alpha-2 nationality. Destination-country specific.
+        dateOfBirth:
+          type: string
+          description: "`YYYY-MM-DD`. Destination-country specific."
+        gender:
+          type: string
+          enum: [M, F, U]
+          description: "(M)ale, (F)emale, (U)nspecified. Business transactions: optional."
+        primaryContactCountryCode:
+          type: string
+          description: Appears in the documented B2P samples. ISO alpha-2.
+        primaryContactNo:
+          type: string
+          description: Appears in the documented B2P samples.
+        primaryContactNoType:
+          type: string
+          description: Appears in the documented B2P samples, for example `personal`.
+        idDocument:
+          type: array
+          items:
+            $ref: "#/components/schemas/IdDocument"
+        postalAddress:
+          $ref: "#/components/schemas/PostalAddress"
+        subjectName:
+          $ref: "#/components/schemas/SubjectName"
+        emailAddress:
+          type: string
+          description: Optional recipient email address for transaction notifications.
+        countryOfBirth:
+          type: string
+          description: Optional beneficiary birth country (ISO alpha-2).
+    IdDocument:
+      type: object
+      properties:
+        idType:
+          type: string
+          description: >-
+            ID document type, for example `nationalidcard`, `drivinglicense`, `passport`. For beneficiaries the
+            accepted values depend on the destination country. Documented length 1-20.
+        idNumber:
+          type: string
+          description: ID document number. Documented length 1-30.
+        issueDate:
+          type: string
+          description: "`YYYY-MM-DD`. Optional."
+        expiryDate:
+          type: string
+          description: "`YYYY-MM-DD`. Mandatory for the sender."
+        issuerCountry:
+          type: string
+          description: ISO alpha-2 country that issued the document. Optional.
+    PostalAddress:
+      type: object
+      properties:
+        addressLine1:
+          type: string
+          description: First address line. Mandatory for the sender. Documented length 4-20.
+        addressLine2:
+          type: string
+          description: Documented length 4-20.
+        addressLine3:
+          type: string
+          description: Documented length 4-20.
+        city:
+          type: string
+          description: City or town. Mandatory for the sender. Documented length 4-20.
+        stateProvince:
+          type: string
+          description: >-
+            State or province. Destination-country specific. Use the ISO alpha-2 state code for transactions
+            originated in the US to Guatemala. Documented length 2-20.
+        postalCode:
+          type: string
+          description: Destination-country specific. Documented length 6-8.
+        country:
+          type: string
+          description: ISO alpha-2 country. Mandatory for the sender. Documented length 2.
+        cityOfBirth:
+          type: string
+          description: Sender/recipient city of birth. Official request parameter tables place this within 
+            senderKyc.postalAddress and recipientKyc.postalAddress; optional.
+    SubjectName:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Title. Optional. Documented length 0-6.
+        firstName:
+          type: string
+          description: First name. Mandatory. Documented length 1-20.
+        middleName:
+          type: string
+          description: Middle name. Optional. Documented length 0-50.
+        lastName:
+          type: string
+          description: Last name. Mandatory. Documented length 1-20.
+        fullName:
+          type: string
+          description: Full name. Mandatory. Documented length 1-50.
+        regionalBeneficiaryName:
+          type: string
+          description: Beneficiary only. Regional name as per the bank account (Japanese - Katakana). 
+            Conditional. Documented length 1-50.
+    InternationalTransferInformation:
+      type: object
+      required: [quoteId, receivingCountry, remittancePurpose, sourceOfFunds]
+      properties:
+        quoteId:
+          type: string
+          description: The `quoteId` returned by the quotation response. Documented length 16-20.
+          example: QT037fQXs3LGWXea4
+        receivingCountry:
+          type: string
+          description: ISO alpha-2 destination country of the payout, for example `NG`. Documented length 2.
+        remittancePurpose:
+          type: string
+          description: |
+            Reason for the transfer. Documented length 4-30. Accepted values:
+            - P2P: Business Profits to Parents, Business Travel, Family Maintenance, Salary, Savings,
+              Medical Expenses, Tuition Fees, Education Support, Gift, Home Improvement, Debt Settlement,
+              Real Estate, Taxes.
+            - P2B, B2P, B2B: Advanced Goods Payments, Business profits to Parents, Business Travel,
+              Charitable Donation, Conference or Training Fee, Employee Compensation, Events or Competition
+              Participation Expenses, Export Goods Payments, Goods and Services, Goods Exported,
+              Loan Repayment, Other Business, Other Business Services, Rent Property Expenses,
+              Salary Payment, Software Export, Travel Cost Accomodation Cost, Travel Expenses.
+        sourceOfFunds:
+          type: string
+          description: |
+            Source of funds. Documented length 4-17. Accepted values:
+            - P2P: Salary, Savings, Lottery, Loan, Business Income, Others.
+            - P2B, B2P, B2B: Salary, Savings, Lottery, Loan, Business Income, Business Profit, Settlement, Others.
+        relationshipSender:
+          type: string
+          description: |
+            Relation between sender and beneficiary. Mandatory for P2P, optional for business transactions.
+            Documented length 3-11. Accepted P2P values: Self, Father, Mother, Spouse, Son, Daughter, Brother,
+            Sister, Friend, Employer, Colleague.
+    BusinessInformation:
+      type: object
+      description: Business KYC for p2b, b2b and b2p transactions.
+      properties:
+        senderKyc:
+          $ref: "#/components/schemas/BusinessSenderKyc"
+        recepientKyc:
+          allOf:
+          - $ref: "#/components/schemas/BusinessRecipientKyc"
+          description: >-
+            Business recipient KYC. The JSON key is spelled `recepientKyc` in every documented sample
+            (the parameter tables call it `businessrecipientKyc`). Applies to p2b and b2b.
+    BusinessSenderKyc:
+      type: object
+      description: Applicable to b2p and b2b transactions; send an empty object for p2b.
+      properties:
+        businessName:
+          type: string
+          description: Company name. Mandatory. Documented length 4-180.
+        businessPINCode:
+          type: string
+          description: Company PIN code. Optional. Documented length 2-20.
+        businessAddress1:
+          type: string
+          description: Registered address 1. Mandatory. Documented length 4-20.
+        businessAddress2:
+          type: string
+          description: Registered address 2. Optional. Documented length 4-20.
+        businessAddressCity:
+          type: string
+          description: Registered city. Destination-country specific. Documented length 4-20.
+        businessAddressCountryCode:
+          type: string
+          description: Registered country, ISO alpha-2. Optional.
+        businessAddressZip:
+          type: string
+          description: Registered address zip code. Optional. Documented length 4-20.
+        businessPrimaryContactCountryCode:
+          type: string
+          description: Company primary contact country code, ISO alpha-2. Mandatory.
+        businessPrimaryContactNo:
+          type: string
+          description: Company primary contact number. Mandatory. Documented length 10-15.
+        businessDescription:
+          type: string
+          description: Short description of the business. Optional. Documented length 0-100.
+        businessEmail:
+          type: string
+          description: Company email. Mandatory per the parameter table. Documented length 0-100.
+        businessCountryCode:
+          type: string
+          description: Company country, ISO alpha-2. Mandatory.
+        businessRegistrationType:
+          type: string
+          description: Type of registration, for example `Private Limited Company`. Mandatory. Documented 
+            length 4-100.
+        businessRegistrationIssuedBy:
+          type: string
+          description: Company incorporation issued by. Optional. Documented length 0-20.
+        businessRegistrationIssuedAt:
+          type: string
+          description: Company incorporation issued at. Optional. Documented length 0-20.
+        businessRegistrationNumber:
+          type: string
+          description: Company incorporation number. Mandatory. Documented length 4-20.
+        businessRegistrationIssueDate:
+          type: string
+          description: "Company incorporation issue date, `YYYY-MM-DD`. Mandatory."
+        businessIDValidThru:
+          type: string
+          description: "Company incorporation expiry date, `YYYY-MM-DD`. Mandatory."
+        businessPrimaryContactNoType:
+          type: string
+          description: Primary contact number type (Personal/Office), optional in business parameter lists.
+    BusinessRecipientKyc:
+      type: object
+      description: Applicable to p2b and b2b transactions; send an empty object for b2p.
+      properties:
+        businessName:
+          type: string
+          description: Company name. Mandatory. Documented length 4-180.
+        businessPINCode:
+          type: string
+          description: Company PIN code. Optional. Documented length 2-20.
+        businessAddress1:
+          type: string
+          description: Registered address 1. Optional. Documented length 4-20.
+        businessAddress2:
+          type: string
+          description: Registered address 2. Optional. Documented length 4-20.
+        businessAddressCity:
+          type: string
+          description: Registered city. Optional. Documented length 4-20.
+        businessAddressState:
+          type: string
+          description: Registered state. Optional. Documented length 4-20.
+        businessAddressCountryCode:
+          type: string
+          description: Registered country, ISO alpha-2. Mandatory.
+        businessAddressZip:
+          type: string
+          description: Registered address zip code. Optional. Documented length 4-20.
+        businessPrimaryContactCountryCode:
+          type: string
+          description: Company primary contact country code, ISO alpha-2. Optional.
+        businessPrimaryContactNo:
+          type: string
+          description: Company primary contact number. Optional. Documented length 10-15.
+        businessPrimaryContactNoType:
+          type: string
+          description: Contact number type, for example Mobile, Personal or Office. Optional. Documented 
+            length 4-50.
+        businessDescription:
+          type: string
+          description: Short description of the business. Optional. Documented length 0-100.
+        businessEmail:
+          type: string
+          description: Company email. Optional. Documented length 0-100.
+        businessCountryCode:
+          type: string
+          description: Company country, ISO alpha-2. Optional.
+        businessRegistrationType:
+          type: string
+          description: Type of registration. Conditional. Documented length 0-100.
+        businessRegistrationNumber:
+          type: string
+          description: Company incorporation number. Destination-country specific. Documented length 0-20.
+        businessRegistrationIssuedBy:
+          type: string
+          description: Company incorporation issued by. Optional. Documented length 0-20.
+        businessRegistrationIssuedAt:
+          type: string
+          description: Company incorporation issued at. Optional. Documented length 0-20.
+        businessRegistrationIssueDate:
+          type: string
+          description: "Company incorporation issue date, `YYYY-MM-DD`. Mandatory. Documented length 0-10."
+        businessIDValidThru:
+          type: string
+          description: "Company incorporation expiry date, `YYYY-MM-DD`. Optional. Documented length 0-10."
+        typeofbusiness:
+          type: string
+          description: Type of company. Optional. Documented length 0-20.
+        businessPObox:
+          type: string
+          description: >-
+            Company PO box. Optional. Documented length 0-10. The parameter table lists it as
+            "business PO box"; the JSON samples use `businessPObox`.
+        businessMobile:
+          type: string
+          description: >-
+            Company mobile number, used for SMS notifications when `beneficiarySmsNotify` is `true` on b2b
+            and p2b transactions. Appears in the JSON samples only.
+        regionalBeneficiaryName:
+          type: string
+          description: Regional beneficiary name as per bank account (Japanese - Katakana). Conditional. 
+            Documented length 1-50.
+    LedgerBalance:
+      type: object
+      properties:
+        currency:
+          type: string
+          description: Ledger currency (ISO 4217).
+        currentBalance:
+          type: string
+          description: Current balance, for example `1000.000000`.
+        status:
+          type: string
+          description: Ledger status, for example `available`. Balances are only returned for active 
+            ledgers.
+        account:
+          type: string
+          description: TerraPay ledger account/book name such as TL-TERRAPAY-US-SENDER-USD.
+    CancelTransactionRequest:
+      type: object
+      required: [txnId]
+      properties:
+        txnId:
+          type: string
+          description: TerraPay transaction reference returned in the create-transaction response, or the 
+            partner transaction id.
+        reason:
+          type: string
+          description: Reason for cancelling. Not listed in the parameter table but sent in every documented
+            sample.
+    CancelTransactionResponse:
+      type: object
+      properties:
+        statusCode:
+          type: string
+          description: "`3033` on success; `15001`-`15005` for the failure cases."
+        responseMessage:
+          type: string
+    ReverseTransactionRequest:
+      type: object
+      required: [txnId]
+      properties:
+        txnId:
+          type: string
+          description: TerraPay transaction reference returned in the create-transaction response, or the 
+            partner transaction id.
+        reversalReason:
+          type: string
+          description: Reason for the reversal. Not listed in the parameter table but sent in every 
+            documented sample.
+    ReverseTransactionResponse:
+      type: object
+      properties:
+        responseCode:
+          type: string
+          description: "`16000`-`16007`."
+        responseMessage:
+          type: string
+        txnId:
+          type: string
+    Statement:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - TRANSFERRED
+          - REJECTED
+          - BOUNCED
+          - LIQUIDITY
+          - PENDING
+          description: PENDING is documented in the statement types narrative although absent from the 
+            four-type table.
+        internalRef:
+          type: string
+          description: TerraPay transaction reference.
+        externalRef:
+          type: string
+          description: Partner transaction reference. Optional for LIQUIDITY, mandatory otherwise.
+        amount:
+          type: string
+          description: Transaction amount in the balance currency.
+        currency:
+          type: string
+          description: Balance currency (ISO 4217), for example `USD`.
+        convertedAmount:
+          type: string
+          description: Decimal JSON string, which may be the empty string for liquidity entries; do not use 
+            strict decimal pattern here.
+        convertedCurrency:
+          type: string
+          description: Currency of `convertedAmount`. Optional for LIQUIDITY.
+        balance:
+          type: string
+          description: Balance value after the transaction.
+        message:
+          type: string
+          description: Extra description; contains a parseable reason for REJECTED and BOUNCED entries.
+        creationTime:
+          type: string
+          format: date-time
+          description: UTC timestamp when funds are reserved, debited or credited.
+        modifiedTime:
+          type: string
+          format: date-time
+          description: UTC timestamp of final processing update.
+    BankListResponse:
+      type: object
+      properties:
+        countryCode:
+          type: string
+        lastUpdatedOn:
+          type: string
+          description: "Last update time, format `YYYY-MM-DD HH:mm:ss.SSS`."
+        banks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bank"
+    Bank:
+      type: object
+      properties:
+        bankName:
+          type: string
+          description: Full name of the beneficiary bank.
+        bankCode:
+          type: string
+          description: IFSC code or SWIFT BIC; mandatory in some destination countries.
+        providerCode:
+          type: string
+          description: Code identifying the bank; may be empty.
+        status:
+          type: string
+          description: Status of the bank, for example `ACTIVE`. Transactions to non-active banks fail.
+    WalletListResponse:
+      type: object
+      properties:
+        countryCode:
+          type: string
+        wallets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Wallet"
+    Wallet:
+      type: object
+      properties:
+        walletName:
+          type: string
+        providerCode:
+          type: string
+          description: Numeric code identifying the wallet, to be used as `provider`.
+    FileUploadResponse:
+      type: object
+      properties:
+        responseCode:
+          type: string
+          description: 19000 on successful file upload; 19001 on failure, in published examples.
+        responseMessage:
+          type: string
+    TerraPayVerifyRequest:
+      type: object
+      description: "Destination verification details (Bank/Wallet/Card). Documentation marks instrumentType,\n\
+        country and paymentRef as required, but the wallet example omits instrumentType and country\nis stated
+        to be conditional for SEPA. Therefore only paymentRef is statically required;\nperform corridor-appropriate
+        validation before calling the API. Example bank request uses\nan empty paymentRef despite the request
+        table marking it mandatory.\n"
+      required:
+      - paymentRef
+      properties:
+        beneficiaryName:
+          type: string
+          description: Beneficiary name on destination record; conditional (1-200).
+        instrumentType:
+          type: string
+          description: Bank, Card or Wallet according to the parameter table; wallet curl example omits it.
+        country:
+          type: string
+          description: ISO alpha-2 destination; docs permit exceptions for SEPA.
+        bankCode:
+          type: string
+          description: Bank IFSC (India) or BIC otherwise; conditional for non-SEPA bank accounts.
+        bankName:
+          type: string
+          description: Destination bank name; conditional on corridor and IBAN.
+        bankSubCode:
+          type: string
+          description: Branch/routing bank code if required by payout country.
+        paymentRef:
+          type: string
+          description: Beneficiary IBAN/bank account/MSISDN/card or encrypted PAN (card). Mandatory in 
+            table.
+        provider:
+          type: string
+          description: Provider identifier. Numeric-looking codes must remain strings (1-12).
+        idType:
+          type: string
+          description: Legal-entity identifier type (e.g. LEI), relevant for SEPA.
+        idNumber:
+          type: string
+          description: Legal-entity identifier value, relevant for SEPA.
+        additionalInfo:
+          type: string
+          description: Collective IBAN/virtual-IBAN additional information for payment institutions/EMIs.
+        currency:
+          type: string
+          description: Account currency when required, e.g. Turkey TRY/EUR/USD.
+    TerraPayVerifyResponse:
+      type: object
+      properties:
+        accountMatch:
+          type: string
+          description: MTCH, NMTC or NOAP as listed in official response parameters.
+        nameMatch:
+          type: string
+          description: MTCH, CMTC, NMTC or NOAP as listed in official response parameters.
+        verificationId:
+          type: string
+        verificationDate:
+          type: string
+          description: Verification timestamp e.g. 2026-01-30 06:09:33.
+        statusCode:
+          type: string
+          description: Verification result / error code, e.g. RC103, RC108, RC125.
+        statusMessage:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+          description: Field-level validation error messages, where present.
+    StatusNotificationRequest:
+      type: object
+      description: POST payload sent by TerraPay to the callback URL hosted by the partner.
+      required:
+      - transactionId
+      - partnerTransId
+      - responseCode
+      - responseMsg
+      - status
+      properties:
+        transactionId:
+          type: string
+          description: TerraPay-generated transaction reference.
+        partnerTransId:
+          type: string
+          description: Partner-generated transaction reference.
+        responseCode:
+          type: string
+        responseMsg:
+          type: string
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILED
+          - CANCELLED
+          - RETURNED
+          - REVERSAL PENDING
+          - REVERSAL REJECTED
+          description: Authoritative callback status. PENDING is not in callback allowed values, unlike V3 
+            enquiry. Do not refund on REVERSAL PENDING/REJECTED.
+    StatusNotificationAcknowledgement:
+      type: object
+      required:
+      - acknowledged
+      properties:
+        acknowledged:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+          description: Official example returns the JSON STRING "true", not a boolean.
+x-terrapay-response-codes:
+  description: >-
+    Response codes from the TerraPay documentation. `action` is the documented transaction action
+    (Retry, Cancel, Status check, or none) and `contactTerraPay` says whether the partner should contact TerraPay.
+  generic:
+    "1000": {message: "Invalid [propertyName]", contactTerraPay: false, action: Retry}
+    "1001": {message: "[propertyName] value should be between [minlength] to [maxlength]", contactTerraPay: 
+        false, action: Retry}
+    "1002": {message: "[propertyName] must be [length]", contactTerraPay: false, action: Retry}
+    "1003": {message: "Authentication failed. Username or Password is incorrect.", contactTerraPay: true, 
+        action: Retry}
+    "1004": {message: "Invalid parameters in the request", contactTerraPay: false, action: Retry}
+    "1005": {message: "Mandatory fields are missing", contactTerraPay: false, action: Retry}
+    "1006": {message: "Request SHA256 checksum mismatch", contactTerraPay: false, action: Retry}
+    "1007": {message: "Server is busy. Please do a status enquiry to check if your transactions reached TerraPay.",
+      contactTerraPay: false, action: Status check}
+    "1010": {message: "Source country not allowed", contactTerraPay: true, action: Retry}
+    "1011": {message: "Destination country not allowed", contactTerraPay: true, action: Retry}
+    "1012": {message: "Source currency not allowed", contactTerraPay: true, action: Retry}
+    "1013": {message: "Destination currency not allowed", contactTerraPay: true, action: Retry}
+    "1014": {message: "Source country inactive", contactTerraPay: true, action: Retry}
+    "1015": {message: "Destination country inactive", contactTerraPay: true, action: Retry}
+    "1016": {message: "Failed to get destination partner", contactTerraPay: true, action: Retry}
+    "1017": {message: "Source partner validity fail", contactTerraPay: true, action: Retry}
+    "1018": {message: "Destination partner validity fail", contactTerraPay: true, action: Retry}
+    "1019": {message: "Source partner suspended", contactTerraPay: true, action: Retry}
+    "1020": {message: "Destination partner suspended", contactTerraPay: true, action: Retry}
+    "1021": {message: "Source partner inactive", contactTerraPay: true, action: Retry}
+    "1022": {message: "Destination partner inactive", contactTerraPay: true, action: Retry}
+    "1023": {message: "Corridor validity failed", contactTerraPay: true, action: Retry}
+    "1024": {message: "Corridor Suspended", contactTerraPay: true, action: Retry}
+    "1026": {message: "Source MSISDN not allowed.", contactTerraPay: false, action: Cancel}
+    "1027": {message: "Source MSISDN Blacklisted.", contactTerraPay: false, action: Cancel}
+    "1028": {message: "Destination MSISDN not allowed.", contactTerraPay: false, action: Cancel}
+    "1029": {message: "Destination MSISDN Blacklisted.", contactTerraPay: false, action: Cancel}
+    "1030": {message: "Corridor not exists", contactTerraPay: true, action: Retry}
+    "1031": {message: "Source currency inactive", contactTerraPay: true, action: Retry}
+    "1032": {message: "Destination currency inactive", contactTerraPay: true, action: Retry}
+    "1046": {message: "Invalid Transaction ID.", contactTerraPay: false, action: Retry}
+    "1061": {message: "Destination Country Sanctioned.", contactTerraPay: false, action: Cancel}
+    "1062": {message: "Source Country Sanctioned.", contactTerraPay: false, action: Cancel}
+    "1073": {message: "Routing Failed.", contactTerraPay: true, action: Retry}
+  beneficiaryValidation:
+    "6000": {message: "Beneficiary MSISDN Validation Success", contactTerraPay: false, action: None}
+    "6001": {message: "Corridor does not exists", contactTerraPay: true, action: Retry}
+    "6002": {message: "Corridor inactive", contactTerraPay: true, action: Retry}
+    "6003": {message: "Beneficiary MSISDN blacklisted", contactTerraPay: false, action: Cancel}
+    "6004": {message: "Beneficiary validation failed", contactTerraPay: true, action: Cancel}
+    "6005": {message: "Beneficiary Registered but not KYCed", contactTerraPay: false, action: Cancel}
+    "6006": {message: "Beneficiary MSISDN not found", contactTerraPay: false, action: Cancel}
+    "6007": {message: "Beneficiary Suspended", contactTerraPay: false, action: Cancel}
+    "6008": {message: "Beneficiary name does not match", contactTerraPay: false, action: Cancel}
+    "6009": {message: "Beneficiary validation failed. Request timed out at destination partner", 
+        contactTerraPay: true, action: Retry}
+    "6010": {message: "Mandatory KYC parameter check failed", contactTerraPay: true, action: Retry}
+    "6011": {message: "Validation Failed. Beneficiary must register or upgrade KYC Level to receive transactions",
+      contactTerraPay: false, action: Cancel}
+    "6012": {message: "Beneficiary KYC Verification Pending", contactTerraPay: false, action: Cancel}
+    "6013": {message: "Receiver Name Missing", contactTerraPay: false, action: Cancel}
+    "6014": {message: "Customer Not Registered", contactTerraPay: false, action: Cancel}
+    "6017": {message: "Beneficiary Account is locked", contactTerraPay: false, action: Cancel}
+    "6019": {message: "Destination Partner Timed Out - Please retry.", contactTerraPay: true, action: Retry}
+    "6020": {message: "Beneficiary Account is Inactive", contactTerraPay: false, action: Cancel}
+    "6022": {message: "Beneficiary Account Inactive", contactTerraPay: false, action: Cancel}
+    "6023": {message: "Provider code/bank subcode is missing", contactTerraPay: false, action: Cancel}
+    "6024": {message: "Provider code does not match operator network", contactTerraPay: false, action: 
+        Cancel}
+    "6025": {message: "Invalid UPI ID format", contactTerraPay: false, action: Cancel}
+    "6026": {message: "Bank UPI Not Supported", contactTerraPay: false, action: Cancel}
+    "6027": {message: "Incorrect IFSC Code", contactTerraPay: false, action: Retry}
+    "6028": {message: "Validation Penny Drop Service down", contactTerraPay: true, action: Retry}
+    "6030": {message: "Account cannot be validated", contactTerraPay: false, action: Cancel}
+    "6033": {message: "IMPS Node down", contactTerraPay: true, action: Retry}
+    "6034": {message: "Unable to process request", contactTerraPay: true, action: Retry}
+    "6035": {message: "Invalid response from partner", contactTerraPay: true, action: Retry}
+    "6036": {message: "Invalid sort code", contactTerraPay: false, action: Retry}
+    "6101": {message: "Destination bank not configured", contactTerraPay: true, action: Retry}
+    "6102": {message: "Invalid Bank Account Number", contactTerraPay: false, action: Cancel}
+    "6103": {message: "Destination bank not reachable", contactTerraPay: true, action: Retry}
+    "6104": {message: "Validation Failed at Destination Partner", contactTerraPay: true, action: Retry}
+    "6105": {message: "BankSubCode is missing", contactTerraPay: false, action: Retry}
+  quotation:
+    "2000": {message: "Quote Success", contactTerraPay: false, action: None}
+    "2001": {message: "Source amount is invalid", contactTerraPay: false, action: Retry}
+    "2002": {message: "Beneficiary MSISDN validation failed", contactTerraPay: false, action: Cancel}
+    "2003": {message: "Failed to get Forex rate", contactTerraPay: true, action: Retry}
+    "9000": {message: "Success (corridor quotation status)", contactTerraPay: false, action: None}
+  remit:
+    "3000": {message: "Remit Success", contactTerraPay: false, action: None}
+    "3001": {message: "Transaction request should be current date.", contactTerraPay: false, action: Retry}
+    "3002": {message: "Beneficiary Validation failed", contactTerraPay: false, action: Retry}
+    "3003": {message: "Transaction id is invalid", contactTerraPay: false, action: Retry}
+    "3004": {message: "Duplicate transaction Id", contactTerraPay: false, action: Status check}
+    "3005": {message: "Quote and Remit parameters do not match", contactTerraPay: false, action: Retry}
+    "3006": {message: "Sender KYC validation failed", contactTerraPay: false, action: Cancel}
+    "3007": {message: "Beneficiary KYC validation failed", contactTerraPay: false, action: Cancel}
+    "3008": {message: "Quote expired", contactTerraPay: false, action: Cancel}
+    "3009": {message: "Failed to process quote request", contactTerraPay: true, action: Retry}
+    "3010": {message: "Mandatory KYC parameter check failed", contactTerraPay: false, action: Retry}
+    "3011": {message: "Invalid Fx Rate", contactTerraPay: true, action: Retry}
+    "3022": {message: "Corridor validation failed", contactTerraPay: true, action: Retry}
+    "3030": {message: "Possible duplicate transaction received within configured time.", contactTerraPay: 
+        true, action: Retry}
+    "3031": {message: "Connection timeout while connecting to destination partner", contactTerraPay: true, 
+        action: Retry}
+    "3032": {message: "Remit failed", contactTerraPay: true, action: Cancel}
+    "3033": {message: "Cancel Success", contactTerraPay: false, action: None}
+    "3049": {message: "Remit Failed. Insufficient funds", contactTerraPay: false, action: Retry}
+    "3050": {message: "Remit Acknowledged, status PENDING", contactTerraPay: false, action: Status check}
+    "3060": {message: "Beneficiary daily transaction count limit reached", contactTerraPay: false, action: 
+        Cancel}
+    "3061": {message: "Beneficiary weekly transaction count limit reached", contactTerraPay: false, action: 
+        Cancel}
+    "3062": {message: "Beneficiary monthly transaction count limit reached", contactTerraPay: false, action: 
+        Cancel}
+    "3072": {message: "Receiver Daily Transaction Limit Reached", contactTerraPay: false, action: Cancel}
+    "3074": {message: "Beneficiary monthly transaction amount limit reached", contactTerraPay: false, action: 
+        Cancel}
+    "3075": {message: "Sending Partner Min allowed amount check failed.", contactTerraPay: false, action: 
+        Cancel}
+    "3076": {message: "Sending Partner Max allowed amount check failed.", contactTerraPay: false, action: 
+        Cancel}
+    "3077": {message: "Receiving Partner Min allowed amount check failed.", contactTerraPay: false, action: 
+        Cancel}
+    "3078": {message: "Receiving Partner Max allowed amount check failed.", contactTerraPay: false, action: 
+        Cancel}
+    "3079": {message: "Sender Min allowed amount check failed.", contactTerraPay: false, action: Cancel}
+    "3080": {message: "Sender Max allowed amount check failed.", contactTerraPay: false, action: Cancel}
+    "3081": {message: "Receiver Min allowed amount check failed.", contactTerraPay: false, action: Cancel}
+    "3082": {message: "Receiver Max allowed amount check failed.", contactTerraPay: false, action: Cancel}
+    "3100": {message: "Credit Failed. Msisdn not found.", contactTerraPay: false, action: Cancel}
+    "3101": {message: "Bank Credit Failed. Invalid Account.", contactTerraPay: false, action: Cancel}
+    "3102": {message: "Bank Credit Failed. Bank Not Reachable.", contactTerraPay: false, action: Cancel}
+    "3103": {message: "Bank credit failed. Account name mismatch.", contactTerraPay: false, action: Cancel}
+    "3104": {message: "Bank credit failed. Transaction limit exceeded.", contactTerraPay: false, action: 
+        Cancel}
+    "3105": {message: "Bank credit failed. Transaction not permitted.", contactTerraPay: false, action: 
+        Cancel}
+    "3106": {message: "Bank credit failed. Unknown Error.", contactTerraPay: false, action: Cancel}
+    "3107": {message: "Invalid Amount Limit.", contactTerraPay: false, action: Cancel}
+    "3109": {message: "Insufficient funds in the receiving partner account.", contactTerraPay: true, action: 
+        Cancel}
+    "3110": {message: "Invalid Beneficiary Account", contactTerraPay: false, action: Cancel}
+    "3111": {message: "Beneficiary Account not Registered", contactTerraPay: false, action: Cancel}
+    "3113": {message: "Beneficiary Account Limit Reached.", contactTerraPay: false, action: Cancel}
+    "3114": {message: "Beneficiary Account Barred.", contactTerraPay: false, action: Cancel}
+    "3115": {message: "Beneficiary Account Inactive", contactTerraPay: false, action: Cancel}
+    "3116": {message: "Beneficiary Account Locked", contactTerraPay: false, action: Cancel}
+    "3117": {message: "Transfer type not supported", contactTerraPay: false, action: Cancel}
+    "3132": {message: "Remit Failed - Max retry limit reached.", contactTerraPay: false, action: Cancel}
+    "3133": {message: "Sender KYC Sanctioned", contactTerraPay: false, action: Cancel}
+    "3150": {message: "Transaction on hold due to compliance reason.", contactTerraPay: true, action: Status
+        check}
+    "3202": {message: "Remit failed", contactTerraPay: false, action: Cancel}
+    "3208": {message: "Reversal Pending", contactTerraPay: true, action: Status check}
+    "3210": {message: "Invalid sort code", contactTerraPay: false, action: Cancel}
+    "3211": {message: "Beneficiary Opt-in Pending", contactTerraPay: false, action: Status check}
+    "3212": {message: "Beneficiary Pending Cashout", contactTerraPay: false, action: Status check}
+    "3213": {message: "Beneficiary Pending Review", contactTerraPay: false, action: Status check}
+    "3214": {message: "Beneficiary Pending Registration", contactTerraPay: false, action: Status check}
+    "3215": {message: "Commercial Transaction", contactTerraPay: true, action: Retry}
+    "3216": {message: "Invalid Beneficiary contact details", contactTerraPay: false, action: Cancel}
+    "3217": {message: "Beneficiary Unresponsive", contactTerraPay: false, action: Cancel}
+    "3218": {message: "Beneficiary Pending Upgrade", contactTerraPay: false, action: Status check}
+    "3219": {message: "Beneficiary Pending Adjustment", contactTerraPay: false, action: Status check}
+    "3222": {message: "Invalid UPI amount.", contactTerraPay: false, action: Cancel}
+    "3223": {message: "Transaction rejected at wallet operator.", contactTerraPay: false, action: Cancel}
+    "3224": {message: "Transaction rejected due to compliance", contactTerraPay: false, action: Cancel}
+    "3225": {message: "Cancellation requested by the sender", contactTerraPay: false, action: Cancel}
+    "3226": {message: "Transaction rejected due to outage/downtime.", contactTerraPay: false, action: Cancel}
+  cancel:
+    "3033": {message: "Cancel Success"}
+    "15001": {message: "Cannot Cancel. Credit already in process."}
+    "15002": {message: "Cannot Cancel. Transaction in Success state."}
+    "15003": {message: "Cannot Cancel. Transaction in Fail state."}
+    "15004": {message: "Cannot Cancel. Transaction not found."}
+    "15005": {message: "Transaction already in canceled state."}
+  reversal:
+    "16000": {message: "Reversal Success."}
+    "16001": {message: "Reversal Failed. Transaction Not found."}
+    "16002": {message: "Reversal Rejected."}
+    "16003": {message: "Reversal Pending."}
+    "16004": {message: "Reversal cannot be done at this stage"}
+    "16005": {message: "Reversal already raised."}
+    "16006": {message: "Transaction already reversed."}
+    "16007": {message: "Reverse cannot be done. Transaction is in failed state."}
+x-terrapay-status-callback:
+  direction: inbound-to-partner
+  method: POST
+  callbackUrl: Partner-configured; not defined by TerraPay
+  requestSchema: '#/components/schemas/StatusNotificationRequest'
+  acknowledgementSchema: '#/components/schemas/StatusNotificationAcknowledgement'
+  source: https://developers.terrapay.com/docs/#status-notification
+x-public-documentation-audit:
+  checkedAtUTC: '2026-11-03T21:00:00Z'
+  officialSource: https://developers.terrapay.com/docs/
+  confirmedChangesFromUserSuppliedDraft:
+  - POST quote endpoint uses /eig/gsmaV2/quotations
+  - Corridor FX endpoints are /eig/gsmaV2/quotations/{prefundingCurrency} and 
+    /eig/gsmaV3/quotations/{prefundingCurrency}
+  - Transaction enquiry endpoint is GET /eig/gsma/transactions_v3/{transactionReference}
+  - Ledger endpoint paths end in /balance_v1
+  - Statements use reporting server :21228 /PartnerPortalReports/partnerstatements_v1, not 
+    /eig/gsma/statements
+  - Multi-part supporting document endpoint /eig/fileUpload
+  - TerraPay Verify has independent host /tpverify/api/v1/verify and different response schema
+  - Quotation v2 accepts scheme and creditParty instrumentType; up to 6 decimal places
+  - V3 enquiry returns status and creditingOrganisationTransactionReference; use status for financial 
+    finality
+  - Ledger response includes account; statement fields are creationTime and modifiedTime, not timestamp
+  - Status notification belongs to partner-hosted callback; only DTOs are provided here
+  unresolved:
+  - No authenticated UAT requests were available to test exact HTTP status codes, all corridor-specific 
+    required fields, or available APIs for a particular partner account.
+  - TerraPay Verify docs call password case-sensitive while general EIG docs call it case-insensitive.
+  - TerraPay Verify wallet example omits instrumentType, although request parameter table marks it 
+    mandatory.
+  - Statements sample uses ledgerBookName, but its request parameter table documents only start/end.
+  - V3 corridor description mentions country/scheme/vertical filters but does not list their query-parameter
+    names.
+  - File upload sample is DOCX while supported file types table lists PNG/JPG/PDF.
+  - V3 vertical type uses verticalTypes in example but verticalType in documentation parameter table.
+  - Transaction reference and KYC sample errors and cross-corridor conditional field rules require partner 
+    UAT confirmation.
